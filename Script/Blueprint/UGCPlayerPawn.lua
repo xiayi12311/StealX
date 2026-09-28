@@ -1,3 +1,5 @@
+---@class UGCPlayerPawn_C:BP_UGCPlayerPawn_C
+--Edit Below--
 local UGCPlayerPawn = {}
  
 --[[
