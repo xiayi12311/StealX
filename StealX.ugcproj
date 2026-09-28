@@ -9,7 +9,7 @@ ProjectShortPath=/StealX/
 StartMapName=/StealX/UGCmap
 MapMode=0
 bIsBigWorld=0
-Version=1.38.12.15918
+Version=1.38.12.15920
 UpdateVersion=10
 GameModePath=/StealX/Asset/Blueprint/UGCGameMode.UGCGameMode_C
 
