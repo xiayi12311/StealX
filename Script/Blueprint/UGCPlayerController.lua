@@ -2,6 +2,10 @@
 ---@field YXRunningMachineComponent YXRunningMachineComponent_C
 --Edit Below--
 local UGCPlayerController = {}
+local Delegate = require("common.Delegate")
+
+-- 离开跑步机委托
+UGCPlayerController.LeaveRunningMachineDelegate = Delegate.New()
  
 function UGCPlayerController:ReceiveBeginPlay()
     UGCPlayerController.SuperClass.ReceiveBeginPlay(self)
@@ -30,6 +34,10 @@ function UGCPlayerController:GetAvailableServerRPCs()
     return 
 
     "GM_Function"
+end
+
+function UGCPlayerController:OnLeaveRunningMachine()
+    self.LeaveRunningMachineDelegate:Broadcast()
 end
 
 local GMCommandTable = {}

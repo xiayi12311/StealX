@@ -1,5 +1,6 @@
 ---@class MainWidget_C:UserWidgetLayout
 ---@field 030_BuffList_Main_UIBP_C_0 030_BuffList_Main_UIBP_C
+---@field BPWidget_CurSpeed BPWidget_CurSpeed_C
 ---@field MainUI_AimMode_16_C_0 MainUI_AimMode_16_C
 ---@field MainUI_BackPack_C_0 MainUI_BackPack_C
 ---@field MainUI_Bear_130_C_0 MainUI_Bear_130_C

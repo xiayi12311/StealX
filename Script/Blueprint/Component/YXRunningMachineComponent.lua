@@ -2,13 +2,19 @@
 --Edit Below--
 local YXRunningMachineComponent = {}
 YXRunningMachineComponent.RunningMachineConfig = nil
--- 累加速度的计时器表,存每台正在被踩的跑步机对应的循环计时器句柄
-YXRunningMachineComponent.PawnTimers = {}
--- 每台跑步机的累计值表,存玩家在这台跑步机上已经累加了多少速度倍率
-YXRunningMachineComponent.SpeedAccum = {}
 
 function YXRunningMachineComponent:ReceiveBeginPlay()
     YXRunningMachineComponent.SuperClass.ReceiveBeginPlay(self)
+    -- 注意：必须初始化为实例级表（不能放类定义处，否则所有玩家实例共享一份数据会互相污染）
+    -- 累加速度的计时器表,存每台正在被踩的跑步机对应的循环计时器句柄
+    self.PawnTimers = {}
+    -- 每台跑步机的累计值表,存玩家在这台跑步机上已经累加了多少速度倍率
+    self.SpeedAccum = {}
+
+    local Owner = self:GetOwner()
+    if Owner then
+        Owner.RunningMachineComp = self
+    end
 end
 
 -- function YXRunningMachineComponent:ReceiveTick(DeltaTime)
@@ -36,13 +42,14 @@ function YXRunningMachineComponent:GetRunningMachineConfig()
     return self.RunningMachineConfig
 end
 
--- 按 ID 取配置行（遍历匹配 ID 字段，不依赖行 key 的格式）
+-- 按ID取配置行
 function YXRunningMachineComponent:GetConfigByID(InID)
     local TableData = self:GetRunningMachineConfig()
     if TableData == nil then
         ugcprint("[YXRunningMachineComponent] 加载表失败: YX_RunningMachineTable")
         return nil
     end
+
     for _, Row in pairs(TableData) do
         if tonumber(Row.ID) == InID then
             return Row
@@ -52,28 +59,38 @@ function YXRunningMachineComponent:GetConfigByID(InID)
     return nil
 end
 
--- ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐ 跑步机逻辑相关 ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
--- 玩家踏上跑步机（Machine: 跑步机 Actor, Pawn: 踏上的玩家 Pawn）：清零该机累计值，按配置间隔开始累加
-function YXRunningMachineComponent:OnPawnEnter(Machine, Pawn)
-    ugcprint("[YXRunningMachineComponent] OnPawnEnter")
+-- ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐ 跑步机逻辑相关（仅服务端） ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+-- 玩家踏上跑步机（Machine:跑步机Actor, Pawn:踏上的玩家Pawn）：清零该机累计值，按配置间隔开始累加
+function YXRunningMachineComponent:OnPawnEnter(Machine, PlayerPawn)
+    ugcprint("[YXRunningMachineComponent] OnPawnEnter " .. tostring(PlayerPawn.Name))
     if not UGCGameSystem.IsServer() then
         return
     end
-    if Machine == nil or Pawn == nil then
+
+    if Machine == nil or PlayerPawn == nil then
         return
     end
+
     local Cfg = self:GetConfigByID(Machine.RunningMachineID)
     if Cfg == nil then
         return
     end
-    ugcprint("[YXRunningMachineComponent] OnPawnEnter " .. tostring(Cfg.Name))
+
+    local PlayerState = UGCGameSystem.GetPlayerStateByPlayerPawn(PlayerPawn)
+    if PlayerState == nil then
+        return
+    end
+
+    local TempPlayerSpeed = UGCAttributeSystem.GetGameAttributeValue(PlayerPawn, Cfg.AttrName)
+    
     -- 踏上时清零
     self.SpeedAccum[Machine] = 0
     -- 防止重复重叠时叠加多个计时器
     self:StopMachineTimer(Machine)
     -- 踏上时创建，记录句柄
     self.PawnTimers[Machine] = UGCTimerUtility.CreateLuaTimer(Cfg.AddInterval, function()
-        self:AddSpeed(Machine, Cfg)
+        self:AddSpeed(Machine, Cfg) 
+        PlayerState.PlayerCurrentSpeed = TempPlayerSpeed + self.SpeedAccum[Machine]
     end, true)
 end
 
@@ -85,25 +102,30 @@ end
 
 -- 玩家离开跑步机：停表并按累计值一次性结算属性
 function YXRunningMachineComponent:OnPawnLeave(Machine, Pawn)
-    if not UGCGameSystem.IsServer() then
-        return
-    end
+    ugcprint("[YXRunningMachineComponent] OnPawnLeave")
     if Machine == nil or Pawn == nil then
         return
     end
-    ugcprint("[YXRunningMachineComponent] OnPawnLeave")
+
+    if not UGCGameSystem.IsServer() then
+        return
+    end
+
     -- 离开时用句柄停掉计时器
     self:StopMachineTimer(Machine)
     local AddSpeed = self.SpeedAccum[Machine] or 0
-    if AddSpeed > 0 then
-        local Cfg = self:GetConfigByID(Machine.RunningMachineID)
-        if Cfg then
-            -- 离开时把累计值一次性结算到玩家属性上
-            UGCAttributeSystem.AddGameAttributeValue(Pawn, Cfg.AttrName, AddSpeed)
-        end
+    local Cfg = self:GetConfigByID(Machine.RunningMachineID)
+    if AddSpeed > 0 and Cfg then
+        -- 离开时把累计值一次性结算到玩家属性上
+        UGCAttributeSystem.AddGameAttributeValue(Pawn, Cfg.AttrName, AddSpeed)
     end
     self.SpeedAccum[Machine] = nil
     ugcprint("[YXRunningMachineComponent] 结算AddSpeed: " .. AddSpeed)
+    -- 打印结算后的当前属性值（UGC移动速度倍率）
+    if Cfg then
+        local CurValue = UGCAttributeSystem.GetGameAttributeValue(Pawn, Cfg.AttrName)
+        ugcprint("[YXRunningMachineComponent] 当前" .. tostring(Cfg.Name) .. "(" .. tostring(Cfg.AttrName) .. "): " .. tostring(CurValue))
+    end
 end
 
 -- 停掉并清理某台跑步机对应的累加计时器

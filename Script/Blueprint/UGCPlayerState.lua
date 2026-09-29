@@ -1,7 +1,12 @@
 local UGCPlayerState = {}
+local Delegate = require("common.Delegate")
+
+-- 玩家总速度
+UGCPlayerState.PlayerTotalSpeed = 0
 
 -- 玩家当前速度
-UGCPlayerState.CurPlayerSpeed = 0
+UGCPlayerState.PlayerCurrentSpeed = 0
+UGCPlayerState.PlayerCurrentSpeedDelegate = Delegate.New()
 
 -- 玩家跑步机增加速度
 UGCPlayerState.PlayerRunningMachineAddSpeed = 0
@@ -19,59 +24,18 @@ function UGCPlayerState:ReceiveEndPlay()
 end
 
 function UGCPlayerState:GetReplicatedProperties()
-    return
+    return 
+    "PlayerCurrentSpeed"
 end
 
 function UGCPlayerState:GetAvailableServerRPCs()
     return
 end
 
--- function UGCPlayerState:HandleBeginPlayInServer()
---     -- 在玩家PostLogin之后执行初始化逻辑
---     local Message = UGCGenericMessageSystem.Messages.UGC.Player.PlayerEnter
---     UGCGenericMessageSystem.ListenGlobalMessage(self, Message, UGCActorComponentUtility.GetOwner(self), 
---         function (...)
---             self:OnPlayerEnter(...) 
---         end
---     );
-
---     Message = UGCGenericMessageSystem.Messages.UGC.Player.PlayerExit
---     UGCGenericMessageSystem.ListenGlobalMessage(self, Message, UGCActorComponentUtility.GetOwner(self),
---         function (...)
---             self:OnPlayerExit(...)
---         end
---     )
-
---     --  GamePart初始化    
---     UGCGenericMessageSystem.ListenGlobalMessage(self, UGCGenericMessageSystem.Messages.UGC.GamePart.GamePartLoadedForPlayer, self, self.OnGamePartLoaded)
-
-
---     -- 监听关闭通知事件，执行数据存档
---     UGCGenericMessageSystem.ListenGlobalMessage(
---         UGCGameSystem.GameState,
---         UGCGenericMessageSystem.UserDefinedMessages.UGC.UGCDSShutDownManager.DSCloseNotify,
---         self,
---         function()
---             local UID = UGCGameSystem.GetUIDByPlayerState(self)
---             local Data = UGCPlayerStateSystem.GetPlayerArchiveData(UID)
---             UGCPlayerStateSystem.SavePlayerArchiveData(UID, Data)
---         end
---     )
--- end
-
--- function UGCPlayerState:OnPlayerEnter(_, PlayerKey)
---     if UGCGameSystem.GetPlayerKeyByPlayerState(self) ~= PlayerKey then
---         return
---     end
-
---     self.YXUID = UGCGameSystem.GetUIDByPlayerState(self)
---     ugcprint("[UGCPlayerState:OnPlayerEnter] "..tostring(self.YXUID))
-
---     local PlayerController = UGCGameSystem.GetPlayerControllerByPlayerState(self)
---     local Uid = UGCGameSystem.GetUIDByPlayerState(self)
---     local Data = UGCPlayerStateSystem.GetPlayerArchiveData(Uid)
-
--- end
+function UGCPlayerState:OnRep_PlayerCurrentSpeed()
+    ugcprint("[UGCPlayerState] OnRep_PlayerCurrentSpeed " .. tostring(self.PlayerCurrentSpeed))
+    self.PlayerCurrentSpeedDelegate:Broadcast(self.PlayerCurrentSpeed)
+end
 
 
 return UGCPlayerState
