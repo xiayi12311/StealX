@@ -77,10 +77,12 @@ function YX_GMUI:ParseCommand(tCode)
     local PlayerController = UGCGameSystem.GetLocalPlayerController()
     PlayerController:ParseCommand(tCode)     
 end
+
 YX_GMUI.GMFunctionName = {}
 function YX_GMUI:AddGMFunctionName(FunctionName)
     table.insert(self.GMFunctionName, FunctionName)
 end
+
 --输入字符时
 function YX_GMUI:OnGMFunctionTextChanged(InText)
     -- 如果输入为空，清除提示文本
@@ -135,10 +137,17 @@ function YX_GMUI:LuaInit()
 end
 
 function YX_GMUI:OnBtnSetAttributeClicked()
-	--LobbyUtils.CloseWidget(LobbyWidgetType.LWT_MainLobby)
-    local Controller = UGCGameSystem.GetLocalPlayerController()
+    ugcprint("[YX_GMUI] OnBtnSetAttributeClicked")
+    local PlayerController = UGCGameSystem.GetLocalPlayerController()
     local AttributeString = self.CB_SetAttribute:GetSelectedOption()
-    Controller:GM_Function("SetGameAttributeValue", { string.match(AttributeString, "[a-zA-Z]+") or "", self.TB_SetAttribute.Text})
+    -- 选项是显示名，如 "UGC移动速度倍率（UGCGeneralMoveSpeedScale）"，需取括号内的属性名
+    local AttributeName = string.match(AttributeString, "（([%w|]+)）") or string.match(AttributeString, "%(([%w|]+)%)") or ""
+    local Value = tonumber(self.TB_SetAttribute.Text)
+    if AttributeName == "" or Value == nil then
+        ugcprint("[YX_GMUI] 无效的属性名或数值: " .. AttributeString .. " / " .. tostring(self.TB_SetAttribute.Text))
+        return
+    end
+    PlayerController:GM_Function("AddGameAttributeValue", { AttributeName, Value })
 end
 
 -- [Editor Generated Lua] function define End;
