@@ -89,7 +89,7 @@ function YXRunningMachineComponent:OnPawnEnter(Machine, PlayerPawn)
     self:StopMachineTimer(Machine)
     -- 踏上时创建，记录句柄
     self.PawnTimers[Machine] = UGCTimerUtility.CreateLuaTimer(Cfg.AddInterval, function()
-        self:AddSpeed(Machine, Cfg) 
+        self:AddSpeed(Machine, Cfg)
         PlayerState.PlayerCurrentSpeed = TempPlayerSpeed + self.SpeedAccum[Machine]
     end, true)
 end

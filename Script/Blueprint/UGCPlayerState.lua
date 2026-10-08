@@ -8,6 +8,11 @@ UGCPlayerState.PlayerTotalSpeed = 0
 UGCPlayerState.PlayerCurrentSpeed = 0
 UGCPlayerState.PlayerCurrentSpeedDelegate = Delegate.New()
 
+-- 玩家进入跑步机委托
+UGCPlayerState.EnterRunningMachineDelegate = Delegate.New()
+-- 玩家离开跑步机委托
+UGCPlayerState.LeaveRunningMachineDelegate = Delegate.New()
+
 -- 玩家跑步机增加速度
 UGCPlayerState.PlayerRunningMachineAddSpeed = 0
 
@@ -37,5 +42,12 @@ function UGCPlayerState:OnRep_PlayerCurrentSpeed()
     self.PlayerCurrentSpeedDelegate:Broadcast(self.PlayerCurrentSpeed)
 end
 
+function UGCPlayerState:RPC_Client_PlayerCurrentSpeed()
+    if self:HasAuthority() then
+        UnrealNetwork.CallUnrealRPC(self, self, "RPC_Client_PlayerCurrentSpeed", self.PlayerCurrentSpeed)
+    else
+        self.PlayerCurrentSpeedDelegate:Broadcast(self.PlayerCurrentSpeed)
+    end
+end
 
 return UGCPlayerState

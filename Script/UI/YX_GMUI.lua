@@ -1,13 +1,14 @@
 ---@class YX_GMUI_C:UUserWidget
+---@field Btn_AddAttribute UButton
 ---@field Btn_SetAttribute UButton
 ---@field Button_Function UButton
 ---@field Button_GiveItem UButton
 ---@field Button_GM UButton
 ---@field CanvasPanel_GM UCanvasPanel
----@field CB_SetAttribute UComboBoxString
+---@field CB_Attribute UComboBoxString
 ---@field EditableTextBox_Function UEditableTextBox
 ---@field EditableTextBox_ItemID UEditableTextBox
----@field TB_SetAttribute UEditableTextBox
+---@field TB_Attribute UEditableTextBox
 ---@field TextBlock_37 UTextBlock
 ---@field TextBlock_Linked UTextBlock
 --Edit Below--
@@ -131,23 +132,38 @@ function YX_GMUI:LuaInit()
 	-- [Editor Generated Lua] BindingProperty End;
 	
 	-- [Editor Generated Lua] BindingEvent Begin:
-	self.Btn_SetAttribute.OnClicked:Add(self.OnBtnSetAttributeClicked, self);
+	self.Btn_AddAttribute.OnClicked:Add(self.OnBtnAddAttributeClicked, self);
 	--self.Button_8.OnClicked:Add(self.Button_8_OnClicked, self);
+	self.Btn_SetAttribute.OnClicked:Add(self.OnBtnSetAttributeClicked, self);
 	-- [Editor Generated Lua] BindingEvent End;
 end
 
-function YX_GMUI:OnBtnSetAttributeClicked()
-    ugcprint("[YX_GMUI] OnBtnSetAttributeClicked")
+function YX_GMUI:OnBtnAddAttributeClicked()
+    ugcprint("[YX_GMUI] OnBtnAddAttributeClicked")
     local PlayerController = UGCGameSystem.GetLocalPlayerController()
-    local AttributeString = self.CB_SetAttribute:GetSelectedOption()
+    local AttributeString = self.CB_Attribute:GetSelectedOption()
     -- 选项是显示名，如 "UGC移动速度倍率（UGCGeneralMoveSpeedScale）"，需取括号内的属性名
     local AttributeName = string.match(AttributeString, "（([%w|]+)）") or string.match(AttributeString, "%(([%w|]+)%)") or ""
-    local Value = tonumber(self.TB_SetAttribute.Text)
+    local Value = tonumber(self.TB_Attribute.Text)
     if AttributeName == "" or Value == nil then
-        ugcprint("[YX_GMUI] 无效的属性名或数值: " .. AttributeString .. " / " .. tostring(self.TB_SetAttribute.Text))
+        ugcprint("[YX_GMUI] 无效的属性名或数值: " .. AttributeString .. " / " .. tostring(self.TB_Attribute.Text))
         return
     end
     PlayerController:GM_Function("AddGameAttributeValue", { AttributeName, Value })
+end
+
+function YX_GMUI:OnBtnSetAttributeClicked()
+	ugcprint("[YX_GMUI] OnBtnSetAttributeClicked")
+	local PlayerController = UGCGameSystem.GetLocalPlayerController()
+	local AttributeString = self.CB_Attribute:GetSelectedOption()
+	-- 选项是显示名，如 "UGC移动速度倍率（UGCGeneralMoveSpeedScale）"，需取括号内的属性名
+	local AttributeName = string.match(AttributeString, "（([%w|]+)）") or string.match(AttributeString, "%(([%w|]+)%)") or ""
+	local Value = tonumber(self.TB_Attribute.Text)
+	if AttributeName == "" or Value == nil then
+		ugcprint("[YX_GMUI] 无效的属性名或数值: " .. AttributeString .. " / " .. tostring(self.TB_Attribute.Text))
+		return
+	end
+	PlayerController:GM_Function("SetGameAttributeValue", { AttributeName, Value })
 end
 
 -- [Editor Generated Lua] function define End;

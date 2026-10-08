@@ -34,6 +34,11 @@ function BP_RunningMachine_Base:Box_OnComponentBeginOverlap(OverlappedComponent,
         else
             ugcprint("[BP_RunningMachine_Base] Pawn未挂YXRunningMachineComponent")
         end
+    else
+        local PlayerController = UGCGameSystem.GetPlayerControllerByPlayerPawn(OtherActor)
+        local PlayerState = UGCGameSystem.GetPlayerStateByPlayerPawn(OtherActor)
+        local AddInterval = PlayerController.YXRunningMachineComponent:GetConfigByID(self.RunningMachineID).AddInterval
+        PlayerState.EnterRunningMachineDelegate:Broadcast(AddInterval)
     end
 end
 
@@ -44,6 +49,9 @@ function BP_RunningMachine_Base:Box_OnComponentEndOverlap(OverlappedComponent, O
         if Comp then
             Comp:OnPawnLeave(self, OtherActor)
         end
+    else
+        local PlayerState = UGCGameSystem.GetPlayerStateByPlayerPawn(OtherActor)
+        PlayerState.LeaveRunningMachineDelegate:Broadcast()
     end
 end
 

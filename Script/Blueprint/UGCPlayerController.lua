@@ -1,4 +1,5 @@
 ---@class UGCPlayerController_C:BP_UGCPlayerController_C
+---@field YXFloatTextComponent YXFloatTextComponent_C
 ---@field YXRunningMachineComponent YXRunningMachineComponent_C
 --Edit Below--
 local UGCPlayerController = {}
