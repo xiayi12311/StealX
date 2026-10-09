@@ -1,9 +1,6 @@
 local UGCPlayerState = {}
 local Delegate = require("common.Delegate")
 
--- 玩家总速度
-UGCPlayerState.PlayerTotalSpeed = 0
-
 -- 玩家当前速度倍率
 UGCPlayerState.PlayerCurSpeedScale = 1
 
