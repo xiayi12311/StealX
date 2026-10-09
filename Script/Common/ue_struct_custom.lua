@@ -2,13 +2,11 @@
 
 -- sorted by struct name asc 
 
----@class NewUserDefinedStruct
----@field MemberVar_0 bool
-
 ---@class YX_RunningMachineStruct
 ---@field ID int32
 ---@field Name FString
 ---@field AttrName FString
----@field AddSpeed float
+---@field AddSpeedScale float
 ---@field AddInterval float
+---@field AddSpeed int32
 

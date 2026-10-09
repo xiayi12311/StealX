@@ -37,8 +37,8 @@ function BP_RunningMachine_Base:Box_OnComponentBeginOverlap(OverlappedComponent,
     else
         local PlayerController = UGCGameSystem.GetPlayerControllerByPlayerPawn(OtherActor)
         local PlayerState = UGCGameSystem.GetPlayerStateByPlayerPawn(OtherActor)
-        local AddInterval = PlayerController.YXRunningMachineComponent:GetConfigByID(self.RunningMachineID).AddInterval
-        PlayerState.EnterRunningMachineDelegate:Broadcast(AddInterval)
+        local cfg = PlayerController.YXRunningMachineComponent:GetConfigByID(self.RunningMachineID)
+        PlayerState.EnterRunningMachineDelegate:Broadcast(cfg.AddInterval, cfg.AddSpeed)
     end
 end
 

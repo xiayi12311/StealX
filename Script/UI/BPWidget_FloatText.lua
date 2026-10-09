@@ -4,7 +4,7 @@
 --Edit Below--
 local BPWidget_FloatText = { bInitDoOnce = false }
 -- 飘字整体缩放（1=原始大小，1.5=放大50%，0.8=缩小20%）
-local TextScale = 0.8
+local TextScale = 0.5
 -- 飘字上升高度（屏幕像素），由 Lua 计算后叠加到屏幕坐标上。
 -- 如果 BP 里的动画本身已带上升位移，改成 0 避免位移叠加
 local RiseHeight = 80

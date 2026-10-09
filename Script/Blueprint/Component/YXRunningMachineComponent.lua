@@ -9,7 +9,9 @@ function YXRunningMachineComponent:ReceiveBeginPlay()
     -- 累加速度的计时器表,存每台正在被踩的跑步机对应的循环计时器句柄
     self.PawnTimers = {}
     -- 每台跑步机的累计值表,存玩家在这台跑步机上已经累加了多少速度倍率
-    self.SpeedAccum = {}
+    self.SpeedScaleAccum = {}
+    -- 每台跑步机的累计值表,存玩家在这台跑步机上已经累加了多少速度
+    self.SpeedAddAccum = {}
 
     local Owner = self:GetOwner()
     if Owner then
@@ -28,7 +30,8 @@ function YXRunningMachineComponent:ReceiveEndPlay()
             UGCTimerUtility.RemoveLuaTimer(Timer)
         end
         self.PawnTimers = {}
-        self.SpeedAccum = {}
+        self.SpeedScaleAccum = {}
+        self.SpeedAddAccum = {}
     end
     YXRunningMachineComponent.SuperClass.ReceiveEndPlay(self)
 end
@@ -81,23 +84,25 @@ function YXRunningMachineComponent:OnPawnEnter(Machine, PlayerPawn)
         return
     end
 
-    local TempPlayerSpeed = UGCAttributeSystem.GetGameAttributeValue(PlayerPawn, Cfg.AttrName)
+    local TempPlayerSpeed = PlayerState.PlayerCurSpeed
     
     -- 踏上时清零
-    self.SpeedAccum[Machine] = 0
+    self.SpeedScaleAccum[Machine] = 0
+    self.SpeedAddAccum[Machine] = 0
     -- 防止重复重叠时叠加多个计时器
     self:StopMachineTimer(Machine)
     -- 踏上时创建，记录句柄
     self.PawnTimers[Machine] = UGCTimerUtility.CreateLuaTimer(Cfg.AddInterval, function()
-        self:AddSpeed(Machine, Cfg)
-        PlayerState.PlayerCurrentSpeed = TempPlayerSpeed + self.SpeedAccum[Machine]
+        self:AddSpeedScale(Machine, Cfg)
+        PlayerState.PlayerCurSpeed = TempPlayerSpeed + self.SpeedAddAccum[Machine]
     end, true)
 end
 
 -- 每个间隔给该跑步机的累计值加一次
-function YXRunningMachineComponent:AddSpeed(Machine, Cfg)
-    -- 每 AddInterval 秒加一次 AddSpeed
-    self.SpeedAccum[Machine] = (self.SpeedAccum[Machine] or 0) + Cfg.AddSpeed
+function YXRunningMachineComponent:AddSpeedScale(Machine, Cfg)
+    -- 每AddInterval秒加一次AddSpeedScale
+    self.SpeedScaleAccum[Machine] = (self.SpeedScaleAccum[Machine] or 0) + Cfg.AddSpeedScale
+    self.SpeedAddAccum[Machine] = (self.SpeedAddAccum[Machine] or 0) + Cfg.AddSpeed
 end
 
 -- 玩家离开跑步机：停表并按累计值一次性结算属性
@@ -113,14 +118,16 @@ function YXRunningMachineComponent:OnPawnLeave(Machine, Pawn)
 
     -- 离开时用句柄停掉计时器
     self:StopMachineTimer(Machine)
-    local AddSpeed = self.SpeedAccum[Machine] or 0
+    local AddSpeedScale = self.SpeedScaleAccum[Machine] or 0
+    local AddSpeed = self.SpeedAddAccum[Machine] or 0
     local Cfg = self:GetConfigByID(Machine.RunningMachineID)
-    if AddSpeed > 0 and Cfg then
+    if AddSpeedScale > 0 and Cfg then
         -- 离开时把累计值一次性结算到玩家属性上
-        UGCAttributeSystem.AddGameAttributeValue(Pawn, Cfg.AttrName, AddSpeed)
+        UGCAttributeSystem.AddGameAttributeValue(Pawn, Cfg.AttrName, AddSpeedScale)
     end
-    self.SpeedAccum[Machine] = nil
-    ugcprint("[YXRunningMachineComponent] 结算AddSpeed: " .. AddSpeed)
+    self.SpeedScaleAccum[Machine] = nil
+    self.SpeedAddAccum[Machine] = nil
+    ugcprint("[YXRunningMachineComponent] 结算AddSpeedScale: " .. AddSpeedScale .. ", AttrName: " .. tostring(Cfg and Cfg.AttrName))
     -- 打印结算后的当前属性值（UGC移动速度倍率）
     if Cfg then
         local CurValue = UGCAttributeSystem.GetGameAttributeValue(Pawn, Cfg.AttrName)

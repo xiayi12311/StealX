@@ -1,18 +1,14 @@
 ---@class BPWidget_CurSpeed_C:UUserWidget
 ---@field NewAnimation_1 UWidgetAnimation
----@field Image_0 UImage
+---@field TextBlock_CurSpeed UTextBlock
 ---@field TextBlock_CurSpeedScale UTextBlock
 --Edit Below--
 local BPWidget_CurSpeed = { bInitDoOnce = false }
-
 function BPWidget_CurSpeed:Construct()
     local PlayerState = UGCGameSystem.GetLocalPlayerState()
-    local PlayerController = UGCGameSystem.GetLocalPlayerController()
-    -- self.AddInterval = PlayerController.YXRunningMachineComponent:GetConfigByID(1).AddInterval
     self.BindRetryCount = 0
     self:BindSpeedDelegate()
     self:RefreshSpeed()
-    -- PlayerState.PlayerCurrentSpeedDelegate:Add(self.RefreshSpeedOnRunningMachine, self)
     PlayerState.EnterRunningMachineDelegate:Add(self.StartPlayFloatTextAndShakeAnimation, self)
     PlayerState.LeaveRunningMachineDelegate:Add(self.StopPlayFloatText, self)
 end
@@ -36,8 +32,10 @@ function BPWidget_CurSpeed:GetDisplaySpeed()
 end
 
 function BPWidget_CurSpeed:RefreshSpeed()
+    local PlayerState = UGCGameSystem.GetLocalPlayerState()
     local Value = self:GetDisplaySpeed()
-    self.TextBlock_CurSpeedScale:SetText(string.format("%.3f", Value))
+    self.TextBlock_CurSpeed:SetText(tostring(PlayerState.PlayerCurSpeed))
+    self.TextBlock_CurSpeedScale:SetText(string.format("%.4f", Value))
 end
 
 function BPWidget_CurSpeed:BindSpeedDelegate()
@@ -63,21 +61,16 @@ function BPWidget_CurSpeed:RefreshSpeedOnRunningMachine()
     if PlayerState == nil then
         return
     end
-    self.TextBlock_CurSpeedScale:SetText(string.format("%.3f", PlayerState.PlayerCurrentSpeed))
+    self.TextBlock_CurSpeedScale:SetText(string.format("%.3f", PlayerState.PlayerCurSpeed))
 end
 
-function BPWidget_CurSpeed:StartPlaySpeedShakeAnimation()
-
-    self:PlayAnimation(self.NewAnimation_1, 0, 1, EUMGSequencePlayMode.Forward, 1)
-end
-
-function BPWidget_CurSpeed:StartPlayFloatTextAndShakeAnimation(AddInterval)
+function BPWidget_CurSpeed:StartPlayFloatTextAndShakeAnimation(AddInterval, AddSpeed)
     local PlayerController = UGCGameSystem.GetLocalPlayerController()
     local PlayerState = UGCGameSystem.GetLocalPlayerState()
     self.FloatTextTimer = UGCTimerUtility.CreateLuaTimer(AddInterval, function()
-        PlayerController.YXFloatTextComponent:ShowFloatText("+0.05 速度")
+        PlayerController.YXFloatTextComponent:ShowFloatText(string.format(" +%s 速度", AddSpeed))
         self:PlayAnimation(self.NewAnimation_1, 0, 1, EUMGSequencePlayMode.Forward, 1)
-        self.TextBlock_CurSpeedScale:SetText(string.format("%.3f", PlayerState.PlayerCurrentSpeed))
+        self.TextBlock_CurSpeed:SetText(tostring(PlayerState.PlayerCurSpeed))
     end, true)
 end
 
