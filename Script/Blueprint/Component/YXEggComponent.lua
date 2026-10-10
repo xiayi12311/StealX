@@ -22,27 +22,25 @@ function YXEggComponent:ReceiveBeginPlay()
         self.HeldEgg = nil
     else
         self.OutlinedEgg = nil   -- 当前已描边的蛋（仅客户端）
-        self.OutlineTimer = 0
+        -- 循环定时器：定期刷新“最近可拾取蛋”的描边（不使用 Tick）
+        self.OutlineTimerHandle = UGCTimerUtility.CreateLuaTimer(self.OutlineInterval, function()
+            self:UpdateNearestEggOutline()
+        end, true)
     end
-end
-
-function YXEggComponent:ReceiveTick(DeltaTime)
-    YXEggComponent.SuperClass.ReceiveTick(self, DeltaTime)
-    -- 描边只在客户端显示
-    if UGCGameSystem.IsServer() then
-        return
-    end
-    self.OutlineTimer = (self.OutlineTimer or 0) + (tonumber(DeltaTime) or 0)
-    if self.OutlineTimer < (tonumber(YXEggComponent.OutlineInterval) or 0.2) then
-        return
-    end
-    self.OutlineTimer = 0
-    self:UpdateNearestEggOutline()
 end
 
 function YXEggComponent:ReceiveEndPlay()
+    self:CleanupOutline()
     self:ClearOutline()
     YXEggComponent.SuperClass.ReceiveEndPlay(self)
+end
+
+-- 停止描边刷新定时器
+function YXEggComponent:CleanupOutline()
+    if self.OutlineTimerHandle ~= nil then
+        UGCTimerUtility.RemoveLuaTimer(self.OutlineTimerHandle)
+        self.OutlineTimerHandle = nil
+    end
 end
 
 -- ⭐ 玩家查询 ⭐
@@ -60,9 +58,9 @@ end
 
 -- 直接向场景查询所有蛋 Actor（不再依赖蛋主动注册到 GameState）
 function YXEggComponent:GetEggList()
-    local EggClass = UE.LoadClass(UGCGameSystem.GetUGCResourcesFullPath(YXEggComponent.EggClassPath))
+    local EggClass = UE.LoadClass(UGCGameSystem.GetUGCResourcesFullPath(self.EggClassPath))
     if EggClass == nil then
-        ugcprint("[YXEggComponent] 加载蛋类失败: " .. YXEggComponent.EggClassPath)
+        ugcprint("[YXEggComponent] 加载蛋类失败: " .. self.EggClassPath)
         return nil
     end
     return UGCActorComponentUtility.GetAllActorsOfClass(UGCGameSystem.GetGameState(), EggClass)
@@ -83,7 +81,7 @@ function YXEggComponent:FindNearestFreeEgg()
         return nil
     end
 
-    local Nearest, NearestDist = nil, tonumber(YXEggComponent.PickRange) or 300
+    local Nearest, NearestDist = nil, tonumber(self.PickRange) or 300
     for _, Egg in ipairs(EggList) do
         if UGCObjectUtility.IsObjectValid(Egg) and Egg:IsFree() then
             local EggLoc = UGCActorComponentUtility.GetActorLocation(Egg)
@@ -122,7 +120,7 @@ function YXEggComponent:UpdateNearestEggOutline()
     self:ClearOutline()
     self.OutlinedEgg = Nearest
     if Nearest ~= nil then
-        UGCGameSystem.DrawOutline(Nearest, true, YXEggComponent.OutlineThickness, YXEggComponent.OutlineColor)
+        UGCGameSystem.DrawOutline(Nearest, true, self.OutlineThickness, self.OutlineColor)
     end
 end
 
@@ -153,12 +151,29 @@ function YXEggComponent:IsLocalPlayerHoldingEgg()
     return false
 end
 
+-- 供交互 UI 查询（仅客户端）的交互状态："Pick"（附近有可拾取蛋）/ "Drop"（已持有蛋）/ "None"
+function YXEggComponent:GetInteractionState()
+    if UGCGameSystem.IsServer() then
+        return "None"
+    end
+    if not self:IsLocalPlayerComponent() then
+        return "None"
+    end
+    if self:IsLocalPlayerHoldingEgg() then
+        return "Drop"
+    end
+    if self:FindNearestFreeEgg() ~= nil then
+        return "Pick"
+    end
+    return "None"
+end
+
 -- 取消当前描边
 function YXEggComponent:ClearOutline()
     local Egg = self.OutlinedEgg
     self.OutlinedEgg = nil
     if Egg ~= nil and UGCObjectUtility.IsObjectValid(Egg) then
-        UGCGameSystem.DrawOutline(Egg, false, YXEggComponent.OutlineThickness, YXEggComponent.OutlineColor)
+        UGCGameSystem.DrawOutline(Egg, false, self.OutlineThickness, self.OutlineColor)
     end
 end
 

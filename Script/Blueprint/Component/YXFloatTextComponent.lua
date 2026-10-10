@@ -3,7 +3,7 @@
 local YXFloatTextComponent = {}
 
 -- 飘字 Widget 资源路径
-local WidgetClassPath = 'Asset/UI/BPWidget_FloatText.BPWidget_FloatText_C'
+YXFloatTextComponent.WidgetClassPath = 'Asset/UI/BPWidget_FloatText.BPWidget_FloatText_C'
 
 -- 锚点高度（相对角色脚部，cm）：
 --   角色脚部
@@ -13,15 +13,15 @@ local WidgetClassPath = 'Asset/UI/BPWidget_FloatText.BPWidget_FloatText_C'
 --      │  AboveHeadOffset
 --      ▼
 --   飘字锚点（约头部位置）
-local HeadHeight = 50
-local AboveHeadOffset = 0
+YXFloatTextComponent.HeadHeight = 50
+YXFloatTextComponent.AboveHeadOffset = 0
 
 -- 多条飘字同屏时的横向错开间距（屏幕像素）
-local OverlapSpacing = 60
+YXFloatTextComponent.OverlapSpacing = 60
 -- 同屏最大飘字数量（超出时强制结束最早的一条）
-local MaxVisibleCount = 6
+YXFloatTextComponent.MaxVisibleCount = 6
 -- 横向错开槽位偏移序列（乘 OverlapSpacing），长度需 >= MaxVisibleCount
-local SlotOffsetRanks = { 0, 1, -1, 2, -2, 3 }
+YXFloatTextComponent.SlotOffsetRanks = { 0, 1, -1, 2, -2, 3 }
 
 function YXFloatTextComponent:ReceiveBeginPlay()
     YXFloatTextComponent.SuperClass.ReceiveBeginPlay(self)
@@ -58,7 +58,7 @@ function YXFloatTextComponent:ShowFloatText(InText)
     end
 
     -- 同屏数量超限时，强制结束最早的一条
-    while #self.ActiveFloatTexts >= MaxVisibleCount do
+    while #self.ActiveFloatTexts >= self.MaxVisibleCount do
         self:FinishFloatText(self.ActiveFloatTexts[1])
     end
 
@@ -68,10 +68,10 @@ function YXFloatTextComponent:ShowFloatText(InText)
         return
     end
 
-    local HeightOffset = HeadHeight + AboveHeadOffset
+    local HeightOffset = self.HeadHeight + self.AboveHeadOffset
 
     UGCWidgetUtility.CreateWidgetAsync(
-        UGCGameSystem.GetUGCResourcesFullPath(WidgetClassPath),
+        UGCGameSystem.GetUGCResourcesFullPath(self.WidgetClassPath),
         function (Widget)
             if Widget == nil then return end
             -- 创建期间组件已结束（对局结束等）：直接丢弃
@@ -82,7 +82,7 @@ function YXFloatTextComponent:ShowFloatText(InText)
             Widget:AddToViewport(1000)
             -- 槽位在回调里分配，同帧连发也能拿到不同槽位
             local SlotIndex = self:GetFreeSlotIndex()
-            local OverlapOffsetX = SlotOffsetRanks[SlotIndex] * OverlapSpacing
+            local OverlapOffsetX = self.SlotOffsetRanks[SlotIndex] * self.OverlapSpacing
             Widget:InitFloatText(AnchorActor, HeightOffset, OverlapOffsetX, InText,
                 function (InWidget) self:FinishFloatText(InWidget) end)
             table.insert(self.ActiveFloatTexts, Widget)
@@ -109,7 +109,7 @@ function YXFloatTextComponent:GetFreeSlotIndex()
     for _, SlotIndex in pairs(self.WidgetSlots) do
         UsedSlots[SlotIndex] = true
     end
-    for SlotIndex = 1, MaxVisibleCount do
+    for SlotIndex = 1, self.MaxVisibleCount do
         if not UsedSlots[SlotIndex] then
             return SlotIndex
         end

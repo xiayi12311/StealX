@@ -34,8 +34,32 @@ end
 
 function UGCPlayerController:GetAvailableServerRPCs()
     return 
+    "RPC_Server_PickEgg",   
+    "RPC_Server_DropEgg",
 
     "GM_Function"
+end
+
+-- 客户端请求拾取（服务端执行）
+function UGCPlayerController:RPC_Server_PickEgg()
+    if self:HasAuthority() then
+        if self.YXEggComponent ~= nil then
+            self.YXEggComponent:TryPickEgg()
+        end
+    else
+        UnrealNetwork.CallUnrealRPC(self, self, "RPC_Server_PickEgg")
+    end
+end
+
+-- 客户端请求放下（服务端执行）
+function UGCPlayerController:RPC_Server_DropEgg()
+    if self:HasAuthority() then
+        if self.YXEggComponent ~= nil then
+            self.YXEggComponent:TryDropEgg()
+        end
+    else
+        UnrealNetwork.CallUnrealRPC(self, self, "RPC_Server_DropEgg")
+    end
 end
 
 function UGCPlayerController:OnLeaveRunningMachine()

@@ -4,12 +4,13 @@
 --Edit Below--
 local BPWidget_FloatText = { bInitDoOnce = false }
 -- 飘字整体缩放（1=原始大小，1.5=放大50%，0.8=缩小20%）
-local TextScale = 0.5
+BPWidget_FloatText.TextScale = 0.5
 -- 飘字上升高度（屏幕像素），由 Lua 计算后叠加到屏幕坐标上。
 -- 如果 BP 里的动画本身已带上升位移，改成 0 避免位移叠加
-local RiseHeight = 80
+BPWidget_FloatText.RiseHeight = 80
 -- BP 动画缺失时的兜底时长（秒）
-local DefaultDuration = 1
+BPWidget_FloatText.DefaultDuration = 1
+
 function BPWidget_FloatText:Construct()
     if self.bInitDoOnce then
         return
@@ -19,15 +20,32 @@ function BPWidget_FloatText:Construct()
     self.bPlaying = false
     self.bHiddenByCamera = false
     self.Elapsed = 0
-    self.Duration = DefaultDuration
+    self.Duration = self.DefaultDuration
     self.HeightOffset = 0
     self.OverlapOffsetX = 0
     self.FloatOwner = nil
     self.FinishedCallback = nil
 end
+
+function BPWidget_FloatText:Tick(MyGeometry, InDeltaTime)
+    if not self.bPlaying then
+        return
+    end
+    self.Elapsed = self.Elapsed + InDeltaTime
+    local Owner = self.FloatOwner
+    local bOwnerInvalid = Owner == nil or (Owner.IsValid and not Owner:IsValid())
+    -- 播放结束或锚点已销毁时结束，通知组件回收
+    if self.Elapsed >= self.Duration or bOwnerInvalid then
+        self:Finish()
+        return
+    end
+    self:UpdatePosition()
+end
+
 function BPWidget_FloatText:Destruct()
     self.bPlaying = false
 end
+
 -- 由 YXFloatTextComponent 调用：绑定锚点并开始播放
 -- InOwner: 锚点Actor；InHeightOffset: 锚点头顶高度(cm)；InOverlapOffsetX: 多条飘字横向错开偏移(屏幕像素)
 function BPWidget_FloatText:InitFloatText(InOwner, InHeightOffset, InOverlapOffsetX, InText, InFinishedCallback)
@@ -39,10 +57,10 @@ function BPWidget_FloatText:InitFloatText(InOwner, InHeightOffset, InOverlapOffs
     -- 飘字不接收点击，避免挡住操作
     self:SetVisibility(ESlateVisibility.HitTestInvisible)
     -- 整体缩放
-    self:SetRenderScale(Vector2D.New(TextScale, TextScale))
+    self:SetRenderScale(Vector2D.New(self.TextScale, self.TextScale))
     if self.NewAnimation_1 then
         local EndTime = self.NewAnimation_1:GetEndTime()
-        self.Duration = (EndTime and EndTime > 0) and EndTime or DefaultDuration
+        self.Duration = (EndTime and EndTime > 0) and EndTime or self.DefaultDuration
         self:PlayAnimation(self.NewAnimation_1, 0, 1, EUMGSequencePlayMode.Forward, 1)
     else
         ugcprint("[BPWidget_FloatText] 未绑定动画 NewAnimation_1，使用兜底时长")
@@ -52,6 +70,7 @@ function BPWidget_FloatText:InitFloatText(InOwner, InHeightOffset, InOverlapOffs
     self.bPlaying = true
     self:UpdatePosition()
 end
+
 function BPWidget_FloatText:SetText(InText)
     if self.TextBlock_FloatText then
         self.TextBlock_FloatText:SetText(tostring(InText or ""))
@@ -59,6 +78,7 @@ function BPWidget_FloatText:SetText(InText)
         ugcprint("[BPWidget_FloatText] 找不到文本控件 TextBlock_FloatText，请把控件里的TextBlock改名为 TextBlock_FloatText")
     end
 end
+
 -- 每帧执行：
 --   Owner世界坐标 + 头顶高度偏移
 --        ↓
@@ -99,9 +119,10 @@ function BPWidget_FloatText:UpdatePosition()
     Progress = math.min(math.max(Progress, 0), 1)
     local EaseOut = 1 - (1 - Progress) * (1 - Progress)
     self:SetPositionInViewport(
-        Vector2D.New(ScreenPosition.X + self.OverlapOffsetX, ScreenPosition.Y - RiseHeight * EaseOut),
+        Vector2D.New(ScreenPosition.X + self.OverlapOffsetX, ScreenPosition.Y - self.RiseHeight * EaseOut),
         false)
 end
+
 -- 判断世界坐标是否在镜头朝向的后方（用控制朝向做点积，纯Lua计算，无额外API依赖）
 function BPWidget_FloatText:IsBehindCamera(WorldLocation)
     local LocalPC = UGCGameSystem.GetLocalPlayerController()
@@ -123,20 +144,7 @@ function BPWidget_FloatText:IsBehindCamera(WorldLocation)
     local FwdZ = math.sin(PitchRad)
     return DirX * FwdX + DirY * FwdY + DirZ * FwdZ <= 0
 end
-function BPWidget_FloatText:Tick(MyGeometry, InDeltaTime)
-    if not self.bPlaying then
-        return
-    end
-    self.Elapsed = self.Elapsed + InDeltaTime
-    local Owner = self.FloatOwner
-    local bOwnerInvalid = Owner == nil or (Owner.IsValid and not Owner:IsValid())
-    -- 播放结束或锚点已销毁时结束，通知组件回收
-    if self.Elapsed >= self.Duration or bOwnerInvalid then
-        self:Finish()
-        return
-    end
-    self:UpdatePosition()
-end
+
 -- 播放结束，通知组件回收
 function BPWidget_FloatText:Finish()
     if not self.bPlaying then
@@ -149,6 +157,7 @@ function BPWidget_FloatText:Finish()
         Callback(self)
     end
 end
+
 -- 组件强制回收时调用（同屏超限淘汰 / 组件销毁）
 function BPWidget_FloatText:StopFloat()
     self.bPlaying = false
@@ -157,4 +166,5 @@ function BPWidget_FloatText:StopFloat()
         self:StopAnimation(self.NewAnimation_1)
     end
 end
+
 return BPWidget_FloatText

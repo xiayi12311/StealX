@@ -59,7 +59,7 @@ function BP_Egg_Base:ReceiveBeginPlay()
     if UGCGameSystem.IsServer() then
         self.Config = nil
         self:LoadConfig()
-        self:SetState(BP_Egg_Base.STATE_FREE)
+        self:SetState(self.STATE_FREE)
     end
 end
 
@@ -83,9 +83,9 @@ end
 -- ⭐ 表数据 ⭐
 -- 按蛋 Actor 上配置的 EggTypeID 读取蛋表配置行
 function BP_Egg_Base:LoadConfig()
-    local TableData = UGCGameSystem.GetTableData(UGCGameSystem.GetUGCResourcesFullPath(BP_Egg_Base.EggTablePath))
+    local TableData = UGCGameSystem.GetTableData(UGCGameSystem.GetUGCResourcesFullPath(self.EggTablePath))
     if TableData == nil then
-        ugcprint("[BP_Egg_Base] 加载蛋表失败: " .. BP_Egg_Base.EggTablePath)
+        ugcprint("[BP_Egg_Base] 加载蛋表失败: " .. self.EggTablePath)
         return
     end
     for _, Row in pairs(TableData) do
@@ -109,12 +109,12 @@ end
 -- 在基准体重上随机一个浮动系数：系数 = MinScale + (MaxScale - MinScale) * RandomFloat()^BiasExp
 -- BiasExp > 1 时结果偏向 MinScale，即偏小、大蛋稀有
 function BP_Egg_Base:RollWeight(BaseWeight)
-    local MinScale = tonumber(BP_Egg_Base.RandMinScale) or 1
-    local MaxScale = tonumber(BP_Egg_Base.RandMaxScale) or 1
+    local MinScale = tonumber(self.RandMinScale) or 1
+    local MaxScale = tonumber(self.RandMaxScale) or 1
     if MaxScale < MinScale then
         MaxScale = MinScale
     end
-    local BiasExp = tonumber(BP_Egg_Base.RandBiasExp) or 1
+    local BiasExp = tonumber(self.RandBiasExp) or 1
     if BiasExp < 1 then
         BiasExp = 1
     end
@@ -128,7 +128,7 @@ function BP_Egg_Base:GetRarityRow()
     if self.Config == nil then
         return nil
     end
-    local RarityTable = UGCGameSystem.GetTableData(UGCGameSystem.GetUGCResourcesFullPath(BP_Egg_Base.RarityTablePath))
+    local RarityTable = UGCGameSystem.GetTableData(UGCGameSystem.GetUGCResourcesFullPath(self.RarityTablePath))
     if RarityTable == nil then
         return nil
     end
@@ -150,15 +150,15 @@ function BP_Egg_Base:SetState(NewState)
 end
 
 function BP_Egg_Base:IsFree()
-    return self.EggState == BP_Egg_Base.STATE_FREE
+    return self.EggState == self.STATE_FREE
 end
 
 function BP_Egg_Base:IsHeld()
-    return self.EggState == BP_Egg_Base.STATE_HELD
+    return self.EggState == self.STATE_HELD
 end
 
 function BP_Egg_Base:IsIncubating()
-    return self.EggState == BP_Egg_Base.STATE_INCUBATING
+    return self.EggState == self.STATE_INCUBATING
 end
 
 -- ⭐ 属性同步回调 ⭐
@@ -187,7 +187,7 @@ function BP_Egg_Base:TickIncubateScreen(DeltaTime)
     if UGCGameSystem.IsServer() then
         return
     end
-    if self.EggState ~= BP_Egg_Base.STATE_INCUBATING then
+    if self.EggState ~= self.STATE_INCUBATING then
         self.ClientIncubateRemain = nil
         return
     end
@@ -219,10 +219,10 @@ function BP_Egg_Base:PickUpByPawn(Pawn)
     UGCActorComponentUtility.AttachToActor(self, Pawn, 0, 0, 0, "")
     local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
     if PawnLoc then
-        UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, PawnLoc.Z + (tonumber(BP_Egg_Base.CarryOffsetZ) or 100)))
+        UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, PawnLoc.Z + (tonumber(self.CarryOffsetZ) or 100)))
     end
     self.HolderKey = tonumber(UGCGameSystem.GetPlayerKeyByPlayerPawn(Pawn)) or 0
-    self:SetState(BP_Egg_Base.STATE_HELD)
+    self:SetState(self.STATE_HELD)
     return true
 end
 
@@ -240,12 +240,12 @@ function BP_Egg_Base:DropByPawn(Pawn)
         if PawnLoc then
             -- 角色原点在胶囊体中心，减去站立半高得到脚下地面高度
             local HalfHeight = UGCPawnAttrSystem.GetStandHalfHeight(Pawn) or 88
-            local GroundZ = PawnLoc.Z - HalfHeight + (tonumber(BP_Egg_Base.DropGroundOffsetZ) or 0)
+            local GroundZ = PawnLoc.Z - HalfHeight + (tonumber(self.DropGroundOffsetZ) or 0)
             UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, GroundZ))
         end
     end
     self.HolderKey = 0
-    self:SetState(BP_Egg_Base.STATE_FREE)
+    self:SetState(self.STATE_FREE)
 end
 
 -- ⭐ 孵化（仅服务端） ⭐
@@ -257,7 +257,7 @@ function BP_Egg_Base:StartIncubate()
     if self:IsIncubating() then
         return
     end
-    self:SetState(BP_Egg_Base.STATE_INCUBATING)
+    self:SetState(self.STATE_INCUBATING)
     local IncubateTime = self:CalcIncubateTime()
     self.IncubateTime = IncubateTime   -- 同步给客户端做倒计时显示
     ugcprint("[BP_Egg_Base] 开始孵化，孵化时间=" .. tostring(IncubateTime) .. " 秒")
@@ -271,7 +271,7 @@ function BP_Egg_Base:CalcIncubateTime()
     local Weight = tonumber(self.Weight) or 1
     local RarityRow = self:GetRarityRow()
     local BaseTime = tonumber(RarityRow and RarityRow.BaseIncubateTime) or 10
-    return BaseTime * (Weight / (tonumber(BP_Egg_Base.WeightBase) or 1))
+    return BaseTime * (Weight / (tonumber(self.WeightBase) or 1))
 end
 
 -- 宠物体型 = 随机体重 × 稀有度体型系数
