@@ -1,4 +1,5 @@
 ---@class UGCPlayerController_C:BP_UGCPlayerController_C
+---@field YXEggComponent YXEggComponent_C
 ---@field YXFloatTextComponent YXFloatTextComponent_C
 ---@field YXRunningMachineComponent YXRunningMachineComponent_C
 --Edit Below--
@@ -181,6 +182,27 @@ function UGCPlayerController:RegisterDefaultGMCommands()
                 UGCAttributeSystem.AddGameAttributeValue(PlayerPawn, InData[1], InData[2])
             else
                 UnrealNetwork.CallUnrealRPC(self, self, "GM_Function", "AddGameAttributeValue", InData)
+            end
+        end,
+        ["PickEgg"] = function(self, InData)
+            if self:HasAuthority() then
+                self.YXEggComponent:TryPickEgg()
+            else
+                UnrealNetwork.CallUnrealRPC(self, self, "GM_Function", "PickEgg", InData)
+            end
+        end,
+        ["DropEgg"] = function(self, InData)
+            if self:HasAuthority() then
+                self.YXEggComponent:TryDropEgg()
+            else
+                UnrealNetwork.CallUnrealRPC(self, self, "GM_Function", "DropEgg", InData)
+            end
+        end,
+        ["IncubateEgg"] = function(self, InData)
+            if self:HasAuthority() then
+                self.YXEggComponent:TryIncubateEgg()
+            else
+                UnrealNetwork.CallUnrealRPC(self, self, "GM_Function", "IncubateEgg", InData)
             end
         end,
     }
