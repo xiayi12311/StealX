@@ -1,5 +1,5 @@
 ---@class BP_Egg_Base_C:AActor
----@field STCustomMesh USTCustomMeshComponent
+---@field StaticMesh UStaticMeshComponent
 ---@field DefaultSceneRoot USceneComponent
 ---@field EggTypeID int32
 --Edit Below--
@@ -48,6 +48,9 @@ BP_Egg_Base.IncubateTime = 0
 -- 随机体重（仅服务端使用：决定孵化时间与宠物体型，暂不用于蛋外观缩放）
 BP_Egg_Base.Weight = 1
 
+-- 持有该蛋的玩家 Key（0 = 无人持有）；同步给客户端，用于判断“我是否已持有蛋”
+BP_Egg_Base.HolderKey = 0
+
 -- 客户端本地倒计时（秒），仅客户端倒计时显示用，不参与同步
 BP_Egg_Base.ClientIncubateRemain = nil
 
@@ -70,7 +73,7 @@ function BP_Egg_Base:ReceiveEndPlay()
 end
 
 function BP_Egg_Base:GetReplicatedProperties()
-    return "EggState", "IncubateTime"
+    return "EggState", "IncubateTime", "HolderKey"
 end
 
 function BP_Egg_Base:GetAvailableServerRPCs()
@@ -168,6 +171,16 @@ function BP_Egg_Base:OnRep_IncubateTime()
     self.ClientIncubateRemain = tonumber(self.IncubateTime) or 0
 end
 
+-- 持有者变更（客户端用于抑制描边，无需额外表现）
+function BP_Egg_Base:OnRep_HolderKey()
+end
+
+-- 是否被指定玩家持有
+function BP_Egg_Base:IsHeldByKey(PlayerKey)
+    local Holder = tonumber(self.HolderKey) or 0
+    return Holder ~= 0 and Holder == tonumber(PlayerKey)
+end
+
 -- ⭐ 孵化剩余时间显示（仅客户端；UGCDebugSystem.PrintToScreen 只在客户端生效）⭐
 -- 每帧打印一条（默认 Duration=0 只保持一帧），屏幕左上角始终显示当前剩余时间
 function BP_Egg_Base:TickIncubateScreen(DeltaTime)
@@ -206,9 +219,9 @@ function BP_Egg_Base:PickUpByPawn(Pawn)
     UGCActorComponentUtility.AttachToActor(self, Pawn, 0, 0, 0, "")
     local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
     if PawnLoc then
-        UGCActorComponentUtility.SetActorLocation(
-            self, Vector.New(PawnLoc.X, PawnLoc.Y, PawnLoc.Z + (tonumber(BP_Egg_Base.CarryOffsetZ) or 100)))
+        UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, PawnLoc.Z + (tonumber(BP_Egg_Base.CarryOffsetZ) or 100)))
     end
+    self.HolderKey = tonumber(UGCGameSystem.GetPlayerKeyByPlayerPawn(Pawn)) or 0
     self:SetState(BP_Egg_Base.STATE_HELD)
     return true
 end
@@ -231,6 +244,7 @@ function BP_Egg_Base:DropByPawn(Pawn)
             UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, GroundZ))
         end
     end
+    self.HolderKey = 0
     self:SetState(BP_Egg_Base.STATE_FREE)
 end
 

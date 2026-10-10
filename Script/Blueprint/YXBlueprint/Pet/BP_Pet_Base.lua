@@ -1,5 +1,5 @@
 ---@class BP_Pet_Base_C:AActor
----@field STCustomMesh USTCustomMeshComponent
+---@field Halloween_Prop02 UStaticMeshComponent
 ---@field DefaultSceneRoot USceneComponent
 --Edit Below--
 local BP_Pet_Base = {}

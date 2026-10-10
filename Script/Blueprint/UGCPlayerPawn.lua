@@ -63,6 +63,12 @@ function UGCPlayerPawn:ChangeState(CurState)
     if UGCGameplayTagSystem.IsValidTag(DeadTag) and UGCPersistEffectSystem.HasDynamicState(self, DeadTag) and tostring(CurState.TagName) == "PawnState.Dead" then
         -- 处理死亡状态逻辑：延时后复活玩家
         if PlayerKey then
+            -- 死亡时若持有蛋，把蛋掉落在死亡位置（须早于角色销毁）
+            local PlayerController = UGCGameSystem.GetPlayerControllerByPlayerPawn(self)
+            if PlayerController ~= nil and PlayerController.YXEggComponent ~= nil then
+                PlayerController.YXEggComponent:DropEggOnDeath(self)
+            end
+
             local RespawnDelayTime = 1        -- 复活延时（秒），可按需调整
             local IsDestoryAlivePawn = false  -- 角色已死亡，无需销毁存活角色
             local DestroyDelayTime = 0.01     -- 销毁延时，不能为0
