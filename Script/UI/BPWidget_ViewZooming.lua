@@ -43,18 +43,21 @@ function BPWidget_ViewZooming:UpdateViewMode(Value)
 	if Value == nil then
 		return
 	end
+
 	local bWantFPP = Value >= self.FPPThreshold
 	if self.bViewModeFPP == bWantFPP then
 		return
 	end
+
 	local PlayerController = UGCGameSystem.GetLocalPlayerController()
 	if PlayerController == nil then
 		ugcprint("[BPWidget_ViewZooming:UpdateViewMode] PlayerController 为空，跳过")
+
 		return
 	end
+
 	self.bViewModeFPP = bWantFPP
-	ugcprint(string.format("[BPWidget_ViewZooming:UpdateViewMode] Value=%.3f → %s",
-		Value, bWantFPP and "第一人称(FPP)" or "第三人称(TPP)"))
+	ugcprint(string.format("[BPWidget_ViewZooming:UpdateViewMode] Value=%.3f → %s",	Value, bWantFPP and "第一人称(FPP)" or "第三人称(TPP)"))
 	PlayerController:RPC_Server_SetViewMode(bWantFPP)
 end
 
@@ -63,15 +66,23 @@ function BPWidget_ViewZooming:ApplyZoom(Value)
 	-- ugcprint(string.format("[BPWidget_ViewZooming:ApplyZoom] Value=%.3f", Value))
 	if Value == nil then
 		ugcprint("[BPWidget_ViewZooming:ApplyZoom] Value 为 nil，忽略")
+
 		return
 	end
-	if Value < 0 then Value = 0 end
-	if Value > 1 then Value = 1 end
+
+	if Value < 0 then 
+		Value = 0 
+	end
+
+	if Value > 1 then 
+		Value = 1 
+	end
 
 	local PlayerController = UGCGameSystem.GetLocalPlayerController()
 	local PlayerPawn = UGCGameSystem.GetLocalPlayerPawn()
 	if PlayerController == nil or PlayerPawn == nil then
 		ugcprint(string.format("[BPWidget_ViewZooming:ApplyZoom] PC=%s Pawn=%s，跳过", tostring(PlayerController), tostring(PlayerPawn)))
+		
 		return
 	end
 
@@ -89,6 +100,7 @@ function BPWidget_ViewZooming:ApplyZoom(Value)
 	else
 		ArmLengthAdditive = (0.5 - Value) * 2 * self.ZoomOutArmLengthOffset
 	end
+
 	-- ugcprint(string.format("[BPWidget_ViewZooming:ApplyZoom] Value=%.3f ArmLengthAdditive=%.1f FadeInSpeed=%s", Value, ArmLengthAdditive, tostring(self.FadeInSpeed)))
 	self.CameraTask = UGCGameplayTaskSystem.Player.AddCustomCameraData.NewTask(PlayerController, PlayerPawn, self.FadeInSpeed, nil, nil, ArmLengthAdditive, nil)
 	-- ugcprint(string.format("[BPWidget_ViewZooming:ApplyZoom] 相机任务=%s", tostring(self.CameraTask)))

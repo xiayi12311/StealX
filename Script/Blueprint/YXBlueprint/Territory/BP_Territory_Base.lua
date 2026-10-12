@@ -1,11 +1,13 @@
 ---@class BP_Territory_Base_C:AActor
 ---@field Box UBoxComponent
 ---@field DefaultSceneRoot USceneComponent
+---@field TerritoryID int32
 --Edit Below--
 -- 领地 Actor（场景中预摆放）：代表一块可被某个玩家认领的领地。
 -- 归属（OwnerKey：0 = 未认领，其余为玩家 Key）通过属性同步给客户端；
 -- 客户端据此找到「自己的领地」，服务端据此判断能否孵化。
--- 范围：完全由蓝图上的碰撞盒子 Box 的大小/位置/旋转决定，可直接在地图中摆放调整（Z 高度同样生效）。
+-- 领地编号 TerritoryID（1~8）在编辑器里逐块配置，认领时按编号从小到大分配。
+-- 范围：由蓝图上的碰撞盒子 Box 决定，可直接在地图中摆放调整（取盒子的水平 X/Y 足迹，忽略 Z 高度与盒子旋转）。
 local BP_Territory_Base = {}
 
 -- 归属玩家 Key（复制属性；0 = 未认领）
@@ -31,6 +33,11 @@ function BP_Territory_Base:GetAvailableServerRPCs()
 end
 
 -- ⭐ 归属 ⭐
+-- 领地编号（1~8，由你在编辑器中逐块配置）；0 = 未配置
+function BP_Territory_Base:GetTerritoryID()
+    return tonumber(self.TerritoryID) or 0
+end
+
 -- 当前归属玩家 Key（0 = 未认领）
 function BP_Territory_Base:GetOwnerKey()
     return tonumber(self.OwnerKey) or 0
@@ -55,14 +62,18 @@ function BP_Territory_Base:ClaimByKey(PlayerKey)
     if not UGCGameSystem.IsServer() then
         return false
     end
+
     if PlayerKey == nil then
         return false
     end
+
     if not self:IsUnclaimed() then
         return false
     end
+
     self.OwnerKey = tonumber(PlayerKey)
     ugcprint("[BP_Territory_Base] 领地被认领 OwnerKey=" .. tostring(self.OwnerKey))
+
     return true
 end
 
@@ -71,11 +82,12 @@ function BP_Territory_Base:Release()
     if not UGCGameSystem.IsServer() then
         return
     end
+
     self.OwnerKey = 0
 end
 
 -- ⭐ 范围判定 ⭐
--- 点是否在领地碰撞盒子 Box 的范围内。
+-- 点是否在领地碰撞盒子Box的范围内。
 -- 判定用盒子的「水平投影（X/Y 足迹）」：以盒子的世界位置为中心，半尺寸 = BoxExtent × 盒子缩放；
 -- Z 高度不参与判定（领地视为地面区域，蛋落在脚下、玩家原点在胶囊中心都能稳定判定）；
 -- 不处理盒子的旋转（领地按世界轴对齐）。不处理 Z 也能避免把盒子压扁（Z 缩放为 0）时判定失效。
@@ -83,33 +95,65 @@ function BP_Territory_Base:IsPointInside(Location)
     if Location == nil or Location.X == nil then
         return false
     end
+
     local Box = self.Box
     if Box == nil then
         return false
     end
+
     local BoxExtent = Box.BoxExtent
     if BoxExtent == nil or BoxExtent.X == nil then
         return false
     end
+
     local BoxTransform = UGCActorComponentUtility.GetSceneComponentWorldTransform(Box)
     if BoxTransform == nil then
         return false
     end
+
     local BoxLoc, _, BoxScale = UGCMathUtility.BreakTransform(BoxTransform)
     if BoxLoc == nil or BoxLoc.X == nil then
         return false
     end
+
     -- 盒子缩放（组件/actor 缩放都体现在这里）；取不到时按 1 处理
     local SX, SY = 1, 1
     if BoxScale ~= nil and BoxScale.X ~= nil and BoxScale.Y ~= nil then
         SX = math.abs(BoxScale.X)
         SY = math.abs(BoxScale.Y)
     end
+
     local HalfX = math.abs(BoxExtent.X) * SX
     local HalfY = math.abs(BoxExtent.Y) * SY
     local DX = math.abs(Location.X - BoxLoc.X)
     local DY = math.abs(Location.Y - BoxLoc.Y)
+
     return DX <= HalfX and DY <= HalfY
 end
+
+-- [Editor Generated Lua] function define Begin:
+function BP_Territory_Base:LuaInit()
+	if self.bInitDoOnce then
+		return;
+	end
+	self.bInitDoOnce = true;
+	-- [Editor Generated Lua] BindingProperty Begin:
+	-- [Editor Generated Lua] BindingProperty End;
+	
+	-- [Editor Generated Lua] BindingEvent Begin:
+	self.Box.OnComponentBeginOverlap:Add(self.Box_OnComponentBeginOverlap, self);
+	self.Box.OnComponentEndOverlap:Add(self.Box_OnComponentEndOverlap, self);
+	-- [Editor Generated Lua] BindingEvent End;
+end
+
+function BP_Territory_Base:Box_OnComponentBeginOverlap(OverlappedComponent, OtherActor, OtherComp, OtherBodyIndex, bFromSweep, SweepResult)
+	return nil;
+end
+
+function BP_Territory_Base:Box_OnComponentEndOverlap(OverlappedComponent, OtherActor, OtherComp, OtherBodyIndex)
+	return nil;
+end
+
+-- [Editor Generated Lua] function define End;
 
 return BP_Territory_Base

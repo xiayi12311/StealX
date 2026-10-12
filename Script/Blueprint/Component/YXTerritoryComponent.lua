@@ -1,8 +1,10 @@
 ---@class YXTerritoryComponent_C:ActorComponent
 --Edit Below--
 -- 领地系统组件（挂在 PlayerController 上）：为玩家认领场景中预摆放的一块领地。
--- 服务端：认领规则为「进入顺序先到先得」——从尚未被认领的领地中取排序最靠前的一块，并在玩家离开时释放。
--- 客户端：依据领地同步过来的 OwnerKey 找到「自己的领地」，在屏幕上打印玩家当前是否处于自己的领地中。
+-- 服务端：认领规则为「取编号(TerritoryID)最小的空闲领地」——玩家按进入顺序依次拿到 1、2、3…；
+--         玩家中途退出会释放自己的领地（编号回到空闲池），之后进游戏的玩家会接管该编号的领地；
+--         已在游戏中的玩家编号不受影响。玩家离开时释放领地。
+-- 客户端：依据领地同步过来的 OwnerKey 找到「自己的领地」，在屏幕上打印自己的 TerritoryID 与是否处于领地中。
 -- 领地范围判定由领地 Actor（BP_Territory_Base）按碰撞盒子提供。
 local YXTerritoryComponent = {}
 
@@ -67,6 +69,7 @@ function YXTerritoryComponent:IsPositionInMyTerritory(Location)
     if Territory == nil then
         return false
     end
+
     return Territory:IsPointInside(Location)
 end
 
@@ -78,6 +81,7 @@ function YXTerritoryComponent:GetTerritoryList()
         ugcprint("[YXTerritoryComponent] 加载领地类失败: " .. self.TerritoryClassPath)
         return nil
     end
+
     return UGCActorComponentUtility.GetAllActorsOfClass(UGCGameSystem.GetGameState(), TerritoryClass)
 end
 
@@ -86,16 +90,29 @@ function YXTerritoryComponent:FindTerritoryByOwnerKey(PlayerKey)
     if PlayerKey == nil then
         return nil
     end
+
     local TerritoryList = self:GetTerritoryList()
     if TerritoryList == nil then
         return nil
     end
+
     for _, Territory in ipairs(TerritoryList) do
         if UGCObjectUtility.IsObjectValid(Territory) and Territory:IsOwnedByKey(PlayerKey) then
             return Territory
         end
     end
+
     return nil
+end
+
+-- 指定玩家当前是否处于自己的领地范围内（客户端&服务端都可用，按碰撞盒子判定）
+function YXTerritoryComponent:IsPlayerInOwnTerritory(PlayerKey, Location)
+    local Territory = self:FindTerritoryByOwnerKey(PlayerKey)
+    if Territory == nil then
+        return false
+    end
+
+    return Territory:IsPointInside(Location)
 end
 
 -- 本组件是否属于本机玩家（比较本地 PC 与本组件所属 PC）
@@ -104,34 +121,22 @@ function YXTerritoryComponent:IsLocalPlayerComponent()
     if LocalController == nil then
         return false
     end
+
     return self:GetOwner() == LocalController
 end
 
 -- ⭐ 认领/释放（仅服务端） ⭐
--- 按位置稳定排序（X→Y→Z），保证多玩家同时认领时结果确定
-local function SortByLocation(A, B)
-    local LA = UGCActorComponentUtility.GetActorLocation(A)
-    local LB = UGCActorComponentUtility.GetActorLocation(B)
-    if LA == nil or LB == nil then
-        return false
-    end
-    if LA.X ~= LB.X then
-        return LA.X < LB.X
-    end
-    if LA.Y ~= LB.Y then
-        return LA.Y < LB.Y
-    end
-    return LA.Z < LB.Z
-end
-
--- 认领一块空闲领地（仅服务端）：先到先得
+-- 认领一块空闲领地（仅服务端）：取编号(TerritoryID)最小、且未被认领的领地（编号需 >= 1）
+-- 这样玩家按进入顺序拿到 1、2、3…；有人退出空出的编号会被之后进来的玩家接管
 function YXTerritoryComponent:ClaimTerritory()
     if not UGCGameSystem.IsServer() then
         return
     end
+
     if self:GetMyTerritory() ~= nil then
         return
     end
+
     self.MyTerritory = nil
 
     local PlayerKey = self:GetOwnerPlayerKey()
@@ -146,23 +151,26 @@ function YXTerritoryComponent:ClaimTerritory()
         return
     end
 
-    -- 过滤有效对象后按位置排序
-    local ValidList = {}
+    -- 找出编号最小、且未被认领的领地
+    local Best, BestID = nil, nil
     for _, Territory in ipairs(TerritoryList) do
-        if UGCObjectUtility.IsObjectValid(Territory) then
-            table.insert(ValidList, Territory)
+        if UGCObjectUtility.IsObjectValid(Territory) and Territory:IsUnclaimed() then
+            local ID = Territory:GetTerritoryID()
+            if ID >= 1 and (BestID == nil or ID < BestID) then
+                Best, BestID = Territory, ID
+            end
         end
     end
-    table.sort(ValidList, SortByLocation)
 
-    for _, Territory in ipairs(ValidList) do
-        if Territory:IsUnclaimed() and Territory:ClaimByKey(PlayerKey) then
-            self.MyTerritory = Territory
-            ugcprint("[YXTerritoryComponent] 玩家 " .. tostring(PlayerKey) .. " 认领领地成功")
-            return
-        end
+    if Best == nil then
+        ugcprint("[YXTerritoryComponent] 没有空闲领地可分配（检查领地 TerritoryID 是否配置为 1~8）")
+        return
     end
-    ugcprint("[YXTerritoryComponent] 没有空闲领地可分配")
+
+    if Best:ClaimByKey(PlayerKey) then
+        self.MyTerritory = Best
+        ugcprint("[YXTerritoryComponent] 玩家 " .. tostring(PlayerKey) .. " 认领领地成功 TerritoryID=" .. tostring(BestID))
+    end
 end
 
 -- 释放领地（仅服务端）：玩家离开时把领地放回空闲池
@@ -180,6 +188,7 @@ function YXTerritoryComponent:OnClaimTick()
         self:StopClaimTimer()
         return
     end
+    
     self.ClaimAttempts = (self.ClaimAttempts or 0) + 1
     self:ClaimTerritory()
     if self:GetMyTerritory() ~= nil then
@@ -198,11 +207,12 @@ function YXTerritoryComponent:StopClaimTimer()
 end
 
 -- ⭐ 屏幕打印（仅客户端、仅本机玩家） ⭐
--- 打印本机玩家当前是否处于「自己的领地」碰撞盒子内
+-- 打印本机玩家自己的领地编号(TerritoryID)，以及当前是否处于该领地范围内
 function YXTerritoryComponent:UpdateTerritoryScreenPrint()
     if UGCGameSystem.IsServer() then
         return
     end
+
     if not self:IsLocalPlayerComponent() then
         return
     end
@@ -215,10 +225,12 @@ function YXTerritoryComponent:UpdateTerritoryScreenPrint()
     local MyKey = UGCGameSystem.GetLocalPlayerKey()
     local MyTerritory = self:FindTerritoryByOwnerKey(MyKey)
     if MyTerritory == nil then
-        UGCDebugSystem.PrintToScreen("领地：尚未分配到领地", self.ScreenPrintColor, self.ScreenPrintDuration)
+        UGCDebugSystem.PrintToScreen("领地ID：无（尚未分配到领地）", self.ScreenPrintColor, self.ScreenPrintDuration)
         return
     end
 
+    local MyID = MyTerritory:GetTerritoryID()
+    local Prefix = "领地ID：" .. tostring(MyID) .. "   "
     local Pawn = UGCGameSystem.GetLocalPlayerPawn()
     local InTerritory = false
     if Pawn ~= nil and UGCObjectUtility.IsObjectValid(Pawn) then
@@ -226,9 +238,9 @@ function YXTerritoryComponent:UpdateTerritoryScreenPrint()
     end
 
     if InTerritory then
-        UGCDebugSystem.PrintToScreen("领地：处于自己的领地中", self.ScreenPrintColor, self.ScreenPrintDuration)
+        UGCDebugSystem.PrintToScreen(Prefix .. "处于自己的领地中", self.ScreenPrintColor, self.ScreenPrintDuration)
     else
-        UGCDebugSystem.PrintToScreen("领地：不在自己的领地中", self.ScreenPrintColor, self.ScreenPrintDuration)
+        UGCDebugSystem.PrintToScreen(Prefix .. "不在自己的领地中", self.ScreenPrintColor, self.ScreenPrintDuration)
     end
 end
 

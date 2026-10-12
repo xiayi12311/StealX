@@ -2,7 +2,7 @@
 --Edit Below--
 -- 宠物蛋系统组件（挂在 PlayerController 上）：负责拾取/放下/触发孵化。
 -- 所有会改变蛋状态的逻辑只在服务端执行；交互按键/射线与 GM 指令均可驱动。
--- 孵化规则：只能在「持有者自己的领地」范围内孵化——在自家领地内放下蛋即自动开始孵化。
+-- 孵化规则：只能在「持有者自己的领地」范围内孵化——玩家在自家领地内点交互按钮「孵化」时触发。
 local YXEggComponent = {}
 
 -- 可调参数
@@ -46,12 +46,14 @@ function YXEggComponent:ReleaseHeldEggOnLeave()
     if Egg == nil or not UGCObjectUtility.IsObjectValid(Egg) then
         return
     end
+
     local Pawn = self:GetOwnerPawn()
     if Pawn ~= nil and UGCObjectUtility.IsObjectValid(Pawn) then
         Egg:DropByPawn(Pawn)     -- 角色仍可用：正常落地
     else
         Egg:ReleaseInPlace()     -- 角色已销毁：就地释放
     end
+    
     ugcprint("[YXEggComponent] 玩家离开，已释放持有的蛋")
 end
 
@@ -73,6 +75,7 @@ function YXEggComponent:GetOwnerPawn()
     if Controller == nil then
         return nil
     end
+
     return UGCGameSystem.GetPlayerPawnByPlayerController(Controller)
 end
 
@@ -83,6 +86,7 @@ function YXEggComponent:GetEggList()
         ugcprint("[YXEggComponent] 加载蛋类失败: " .. self.EggClassPath)
         return nil
     end
+
     return UGCActorComponentUtility.GetAllActorsOfClass(UGCGameSystem.GetGameState(), EggClass)
 end
 
@@ -92,10 +96,12 @@ function YXEggComponent:FindNearestFreeEgg()
     if Pawn == nil then
         return nil
     end
+
     local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
     if PawnLoc == nil then
         return nil
     end
+
     local EggList = self:GetEggList()
     if EggList == nil then
         return nil
@@ -125,18 +131,22 @@ function YXEggComponent:UpdateNearestEggOutline()
     if UGCGameSystem.IsServer() then
         return
     end
+
     if not self:IsLocalPlayerComponent() then
         return
     end
+
     -- 已持有蛋时，不再给其他蛋加描边
     if self:IsLocalPlayerHoldingEgg() then
         self:ClearOutline()
         return
     end
+
     local Nearest = self:FindNearestFreeEgg()
     if Nearest == self.OutlinedEgg then
         return
     end
+
     self:ClearOutline()
     self.OutlinedEgg = Nearest
     if Nearest ~= nil then
@@ -150,6 +160,7 @@ function YXEggComponent:IsLocalPlayerComponent()
     if LocalController == nil then
         return false
     end
+
     return self:GetOwnerController() == LocalController
 end
 
@@ -159,32 +170,43 @@ function YXEggComponent:IsLocalPlayerHoldingEgg()
     if MyKey == nil then
         return false
     end
+
     local EggList = self:GetEggList()
     if EggList == nil then
         return false
     end
+
     for _, Egg in ipairs(EggList) do
         if UGCObjectUtility.IsObjectValid(Egg) and Egg:IsHeldByKey(MyKey) then
             return true
         end
     end
+
     return false
 end
 
--- 供交互UI查询（仅客户端）的交互状态："Pick"（附近有可拾取蛋）/ "Drop"（已持有蛋）/ "None"
+-- 供交互UI查询（仅客户端）的交互状态：
+--   "Incubate"（已持有蛋且在自己领地内）/ "Drop"（已持有蛋）/ "Pick"（附近有可拾取蛋）/ "None"
 function YXEggComponent:GetInteractionState()
     if UGCGameSystem.IsServer() then
         return "None"
     end
+
     if not self:IsLocalPlayerComponent() then
         return "None"
     end
+
     if self:IsLocalPlayerHoldingEgg() then
+        if self:IsLocalPlayerInOwnTerritory() then
+            return "Incubate"
+        end
         return "Drop"
     end
+
     if self:FindNearestFreeEgg() ~= nil then
         return "Pick"
     end
+
     return "None"
 end
 
@@ -203,11 +225,13 @@ function YXEggComponent:DropEggOnDeath(DeathPawn)
     if not UGCGameSystem.IsServer() then
         return
     end
+
     local Egg = self.HeldEgg
     if Egg == nil or not UGCObjectUtility.IsObjectValid(Egg) then
         self.HeldEgg = nil
         return
     end
+
     if DeathPawn == nil or not UGCObjectUtility.IsObjectValid(DeathPawn) then
         return
     end
@@ -233,18 +257,20 @@ function YXEggComponent:TryPickEgg()
     if Pawn == nil then
         return
     end
+
     local Nearest = self:FindNearestFreeEgg()
     if Nearest == nil then
         ugcprint("[YXEggComponent] 附近没有可拾取的蛋")
         return
     end
+
     if Nearest:PickUpByPawn(Pawn) then
         self.HeldEgg = Nearest
         ugcprint("[YXEggComponent] 拾取蛋成功")
     end
 end
 
--- 落点是否在本玩家的领地范围内（只有领地主人能在自家领地内孵化）
+-- 服务端：落点是否在本玩家自己的领地范围内
 function YXEggComponent:IsDropInMyTerritory(Location)
     local Controller = self:GetOwnerController()
     if Controller == nil or Controller.YXTerritoryComponent == nil then
@@ -253,11 +279,36 @@ function YXEggComponent:IsDropInMyTerritory(Location)
     return Controller.YXTerritoryComponent:IsPositionInMyTerritory(Location)
 end
 
--- ⭐ 放下（仅服务端）：把当前携带的蛋放回地面；若落在自家领地内则直接开始孵化 ⭐
+-- 客户端：本机玩家当前是否处于「自己的领地」范围内（交互按钮据此切换成“孵化”）
+function YXEggComponent:IsLocalPlayerInOwnTerritory()
+    if UGCGameSystem.IsServer() then
+        return false
+    end
+
+    local Controller = self:GetOwnerController()
+    if Controller == nil or Controller.YXTerritoryComponent == nil then
+        return false
+    end
+
+    local Pawn = UGCGameSystem.GetLocalPlayerPawn()
+    if Pawn == nil or not UGCObjectUtility.IsObjectValid(Pawn) then
+        return false
+    end
+
+    local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
+    if PawnLoc == nil then
+        return false
+    end
+
+    return Controller.YXTerritoryComponent:IsPlayerInOwnTerritory(UGCGameSystem.GetLocalPlayerKey(), PawnLoc)
+end
+
+-- ⭐ 放下（仅服务端）：把当前携带的蛋放回地面（回到 Free，任何玩家可再拾取）⭐
 function YXEggComponent:TryDropEgg()
     if not UGCGameSystem.IsServer() then
         return
     end
+
     local Egg = self.HeldEgg
     if Egg == nil or not UGCObjectUtility.IsObjectValid(Egg) then
         self.HeldEgg = nil
@@ -270,29 +321,41 @@ function YXEggComponent:TryDropEgg()
         return
     end
 
-    -- 先正常放下（落脚/脱离携带/回到 Free）
     Egg:DropByPawn(Pawn)
     self.HeldEgg = nil
+end
 
-    -- 落点在自家领地内 → 直接开始孵化（蛋只在领地范围内可孵化）
-    local DropLoc = UGCActorComponentUtility.GetActorLocation(Egg)
-    if DropLoc == nil then
-        ugcprint("[YXEggComponent] 放下蛋：取不到蛋位置，放弃孵化判定")
+-- ⭐ 在自家领地内孵化（仅服务端，交互按钮「孵化」触发）⭐
+-- 把当前携带的蛋放到脚下并开始孵化；落点必须在玩家自己的领地范围内，否则拒绝（蛋仍拿在手上）
+function YXEggComponent:TryIncubateEggInTerritory()
+    if not UGCGameSystem.IsServer() then
         return
     end
 
-    local Controller = self:GetOwnerController()
-    local TerritoryComp = Controller and Controller.YXTerritoryComponent
-    local MyTerritory = TerritoryComp and TerritoryComp:GetMyTerritory()
-    local InTerritory = self:IsDropInMyTerritory(DropLoc)
-    ugcprint(string.format("[YXEggComponent] 放下蛋：落点=(%.1f, %.1f, %.1f) 我的领地=%s 在领地内=%s",
-        DropLoc.X, DropLoc.Y, DropLoc.Z, tostring(MyTerritory ~= nil), tostring(InTerritory)))
-
-    if InTerritory then
-        local PlayerKey = UGCGameSystem.GetPlayerKeyByPlayerController(Controller)
-        Egg:StartIncubate(PlayerKey)
-        ugcprint("[YXEggComponent] 在自家领地内放下，蛋开始孵化")
+    local Egg = self.HeldEgg
+    if Egg == nil or not UGCObjectUtility.IsObjectValid(Egg) then
+        self.HeldEgg = nil
+        ugcprint("[YXEggComponent] 当前没有携带蛋，无法孵化")
+        return
     end
+
+    local Pawn = self:GetOwnerPawn()
+    if Pawn == nil then
+        return
+    end
+
+    -- 盒体判定只看水平足迹，用玩家位置与蛋的落点等价；不在自家领地内则不放、不孵化
+    local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
+    if not self:IsDropInMyTerritory(PawnLoc) then
+        ugcprint("[YXEggComponent] 孵化被拒绝：不在自己的领地内")
+        return
+    end
+
+    Egg:DropByPawn(Pawn)
+    self.HeldEgg = nil
+    local PlayerKey = UGCGameSystem.GetPlayerKeyByPlayerController(self:GetOwnerController())
+    Egg:StartIncubate(PlayerKey)
+    ugcprint("[YXEggComponent] 在自家领地内孵化，蛋开始孵化")
 end
 
 -- ⭐ 触发孵化（仅服务端，GM 驱测用）⭐
@@ -301,6 +364,7 @@ function YXEggComponent:TryIncubateEgg()
     if not UGCGameSystem.IsServer() then
         return
     end
+
     local Egg = self.HeldEgg
     if Egg == nil or not UGCObjectUtility.IsObjectValid(Egg) then
         self.HeldEgg = nil

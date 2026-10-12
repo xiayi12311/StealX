@@ -37,6 +37,7 @@ function UGCPlayerController:GetAvailableServerRPCs()
     return 
     "RPC_Server_PickEgg",   
     "RPC_Server_DropEgg",
+    "RPC_Server_IncubateEgg",
     "RPC_Server_SetViewMode",
 
     "GM_Function"
@@ -64,7 +65,18 @@ function UGCPlayerController:RPC_Server_DropEgg()
     end
 end
 
--- C2S：客户端请求切换第一/第三人称视角（服务端执行）
+-- C2S：客户端请求在自家领地内孵化（服务端执行）
+function UGCPlayerController:RPC_Server_IncubateEgg()
+    if self:HasAuthority() then
+        if self.YXEggComponent ~= nil then
+            self.YXEggComponent:TryIncubateEggInTerritory()
+        end
+    else
+        UnrealNetwork.CallUnrealRPC(self, self, "RPC_Server_IncubateEgg")
+    end
+end
+
+-- 客户端请求切换第一/第三人称视角（服务端执行）
 function UGCPlayerController:RPC_Server_SetViewMode(IsFPP)
     if self:HasAuthority() then
         local PlayerPawn = UGCGameSystem.GetPlayerPawnByPlayerController(self)

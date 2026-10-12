@@ -91,21 +91,25 @@ function BP_Egg_Base:LoadConfig()
         ugcprint("[BP_Egg_Base] 加载蛋表失败: " .. self.EggTablePath)
         return
     end
+
     for _, Row in pairs(TableData) do
         if tonumber(Row.ID) == tonumber(self.EggTypeID) then
             self.Config = Row
             break
         end
     end
+
     if self.Config == nil then
         ugcprint("[BP_Egg_Base] 蛋表中未找到 EggTypeID=" .. tostring(self.EggTypeID))
         return
     end
+
     -- 体重随机：以表内Weight为基准体重，乘一个全局浮动系数
     local BaseWeight = tonumber(self.Config.Weight) or 1
     if BaseWeight <= 0 then
         BaseWeight = 1
     end
+    
     self.Weight = self:RollWeight(BaseWeight)
 end
 
@@ -117,12 +121,15 @@ function BP_Egg_Base:RollWeight(BaseWeight)
     if MaxScale < MinScale then
         MaxScale = MinScale
     end
+
     local BiasExp = tonumber(self.RandBiasExp) or 1
     if BiasExp < 1 then
         BiasExp = 1
     end
+
     local T = UGCMathUtility.RandomFloat() ^ BiasExp
     local Factor = MinScale + (MaxScale - MinScale) * T
+
     return BaseWeight * Factor
 end
 
@@ -131,15 +138,18 @@ function BP_Egg_Base:GetRarityRow()
     if self.Config == nil then
         return nil
     end
+
     local RarityTable = UGCGameSystem.GetTableData(UGCGameSystem.GetUGCResourcesFullPath(self.RarityTablePath))
     if RarityTable == nil then
         return nil
     end
+
     for _, Row in pairs(RarityTable) do
         if tostring(Row.Rarity) == tostring(self.Config.Rarity) then
             return Row
         end
     end
+
     return nil
 end
 
@@ -148,6 +158,7 @@ function BP_Egg_Base:SetState(NewState)
     if not UGCGameSystem.IsServer() then
         return
     end
+
     self.EggState = NewState
     ugcprint("[BP_Egg_Base] EggTypeID=" .. tostring(self.EggTypeID) .. " 状态切换为 " .. tostring(NewState))
 end
@@ -181,6 +192,7 @@ end
 -- 是否被指定玩家持有
 function BP_Egg_Base:IsHeldByKey(PlayerKey)
     local Holder = tonumber(self.HolderKey) or 0
+
     return Holder ~= 0 and Holder == tonumber(PlayerKey)
 end
 
@@ -195,10 +207,12 @@ function BP_Egg_Base:TickIncubateScreen(DeltaTime)
     if UGCGameSystem.IsServer() then
         return
     end
+
     if self.EggState ~= self.STATE_INCUBATING then
         self.ClientIncubateRemain = nil
         return
     end
+
     if self.ClientIncubateRemain == nil then
         -- 孵化总时长可能晚于状态同步过来，还没有就先不显示
         local Total = tonumber(self.IncubateTime) or 0
@@ -207,6 +221,7 @@ function BP_Egg_Base:TickIncubateScreen(DeltaTime)
         end
         self.ClientIncubateRemain = Total
     end
+
     self.ClientIncubateRemain = self.ClientIncubateRemain - (tonumber(DeltaTime) or 0)
     if self.ClientIncubateRemain < 0 then
         self.ClientIncubateRemain = 0
@@ -220,15 +235,18 @@ function BP_Egg_Base:PickUpByPawn(Pawn)
     if not UGCGameSystem.IsServer() then
         return false
     end
+
     if Pawn == nil or not self:IsFree() or self:IsOccupied() then
         return false
     end
+
     -- 附着到玩家，并把蛋摆到头顶位置
     UGCActorComponentUtility.AttachToActor(self, Pawn, 0, 0, 0, "")
     local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
     if PawnLoc then
         UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, PawnLoc.Z + (tonumber(self.CarryOffsetZ) or 100)))
     end
+
     self.HolderKey = tonumber(UGCGameSystem.GetPlayerKeyByPlayerPawn(Pawn)) or 0
     self:SetState(self.STATE_HELD)
     return true
@@ -239,10 +257,12 @@ function BP_Egg_Base:DropByPawn(Pawn)
     if not UGCGameSystem.IsServer() then
         return
     end
+
     local Root = UGCActorComponentUtility.GetRootComponent(self)
     if Root then
         UGCActorComponentUtility.DetachFromParent(Root, true, false)
     end
+
     if Pawn then
         local PawnLoc = UGCActorComponentUtility.GetActorLocation(Pawn)
         if PawnLoc then
@@ -252,6 +272,7 @@ function BP_Egg_Base:DropByPawn(Pawn)
             UGCActorComponentUtility.SetActorLocation(self, Vector.New(PawnLoc.X, PawnLoc.Y, GroundZ))
         end
     end
+
     self.HolderKey = 0
     self:SetState(self.STATE_FREE)
 end
@@ -262,13 +283,16 @@ function BP_Egg_Base:ReleaseInPlace()
     if not UGCGameSystem.IsServer() then
         return
     end
+
     if not self:IsHeld() then
         return
     end
+
     local Root = UGCActorComponentUtility.GetRootComponent(self)
     if Root then
         UGCActorComponentUtility.DetachFromParent(Root, true, false)
     end
+
     self.HolderKey = 0
     self:SetState(self.STATE_FREE)
 end
@@ -280,9 +304,11 @@ function BP_Egg_Base:StartIncubate(OwnerKey)
     if not UGCGameSystem.IsServer() then
         return
     end
+
     if self:IsIncubating() then
         return
     end
+
     self.IncubateOwnerKey = tonumber(OwnerKey) or 0
     self:SetState(self.STATE_INCUBATING)
     local IncubateTime = self:CalcIncubateTime()
@@ -317,13 +343,14 @@ function BP_Egg_Base:FinishIncubate()
     UGCActorComponentUtility.DestroyActor(self)
 end
 
--- 生成宠物（占位 BP，路径由蛋表 PetClassPath 指定，后补造型时改表即可）
+-- 生成宠物（占位BP，路径由蛋表PetClassPath指定，后补造型时改表即可）
 function BP_Egg_Base:SpawnPet()
     local PetClass = self.Config.PetClass
     if PetClass == nil then
         ugcprint("[BP_Egg_Base] 加载宠物类失败: " .. tostring(PetClass))
         return
     end
+
     local Loc = UGCActorComponentUtility.GetActorLocation(self)
     local Scale = self:CalcPetScale()
     local Pet = UGCActorComponentUtility.SpawnActor(UGCGameSystem.GetGameState(), PetClass, Loc, Rotator.New(0, 0, 0), Vector.New(Scale, Scale, Scale), nil)
@@ -331,6 +358,7 @@ function BP_Egg_Base:SpawnPet()
     if Pet ~= nil then
         Pet.OwnerKey = tonumber(self.IncubateOwnerKey) or 0
     end
+
     ugcprint("[BP_Egg_Base] 孵化完成，生成宠物 Scale=" .. tostring(Scale) .. " OwnerKey=" .. tostring(self.IncubateOwnerKey) .. " Pet=" .. tostring(Pet))
 end
 
