@@ -1,4 +1,5 @@
 ---@class UGCPlayerController_C:BP_UGCPlayerController_C
+---@field YXTerritoryComponent YXTerritoryComponent_C
 ---@field YXEggComponent YXEggComponent_C
 ---@field YXFloatTextComponent YXFloatTextComponent_C
 ---@field YXRunningMachineComponent YXRunningMachineComponent_C
@@ -36,6 +37,7 @@ function UGCPlayerController:GetAvailableServerRPCs()
     return 
     "RPC_Server_PickEgg",   
     "RPC_Server_DropEgg",
+    "RPC_Server_SetViewMode",
 
     "GM_Function"
 end
@@ -59,6 +61,23 @@ function UGCPlayerController:RPC_Server_DropEgg()
         end
     else
         UnrealNetwork.CallUnrealRPC(self, self, "RPC_Server_DropEgg")
+    end
+end
+
+-- C2S：客户端请求切换第一/第三人称视角（服务端执行）
+function UGCPlayerController:RPC_Server_SetViewMode(IsFPP)
+    if self:HasAuthority() then
+        local PlayerPawn = UGCGameSystem.GetPlayerPawnByPlayerController(self)
+        if PlayerPawn == nil then
+            return
+        end
+        if IsFPP then
+            UGCPlayerPawnSystem.SetIsFPP(PlayerPawn, true, true)
+        else
+            UGCPlayerPawnSystem.SetIsTPP(PlayerPawn, true, true)
+        end
+    else
+        UnrealNetwork.CallUnrealRPC(self, self, "RPC_Server_SetViewMode", IsFPP)
     end
 end
 

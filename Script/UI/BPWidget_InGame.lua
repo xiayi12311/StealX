@@ -1,6 +1,7 @@
 ---@class BPWidget_InGame_C:UUserWidget
 ---@field BPWidget_CurSpeed BPWidget_CurSpeed_C
 ---@field BPWidget_IteractionButtons BPWidget_IteractionButtons_C
+---@field BPWidget_ViewZooming BPWidget_ViewZooming_C
 --Edit Below--
 local BPWidget_InGame = { bInitDoOnce = false } 
 

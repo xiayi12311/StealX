@@ -6,10 +6,10 @@
 -- 宠物蛋 Actor：蛋的状态机、随机体重与孵化逻辑（仅服务端推进），状态通过属性同步给客户端。
 -- 蛋的外观大小暂不随体重缩放，保持蓝图默认大小（后续需要时再接缩放表现）。
 --
--- 蛋状态流转（安全区/绑定暂未实现）：
+-- 蛋状态流转：
 --   Free(0)       在地上，任何玩家可拾取
 --   Held(1)       被玩家持有，可随地放下回到 Free
---   Incubating(2) 已放下并开始孵化（当前由 GM 指令触发），放下后不可取回
+--   Incubating(2) 在自家领地内放下后开始孵化，放下后不可取回
 local BP_Egg_Base = {}
 
 -- 蛋状态常量
@@ -17,7 +17,7 @@ BP_Egg_Base.STATE_FREE = 0
 BP_Egg_Base.STATE_HELD = 1
 BP_Egg_Base.STATE_INCUBATING = 2
 
--- 蛋表 / 稀有度表路径
+-- 蛋表/稀有度表路径
 BP_Egg_Base.EggTablePath = 'Asset/Data/Table/YX_EggTable.YX_EggTable'
 BP_Egg_Base.RarityTablePath = 'Asset/Data/Table/YX_EggRarityTable.YX_EggRarityTable'
 
@@ -32,7 +32,7 @@ BP_Egg_Base.RandMinScale = 1.0
 BP_Egg_Base.RandMaxScale = 1.0
 BP_Egg_Base.RandBiasExp = 2.0
 
--- 携带（拾取）时蛋相对角色原点的 Z 偏移。
+-- 携带（拾取）时蛋相对角色原点的Z偏移。
 -- 角色 Actor 原点在胶囊体中心，原点上方约 130 为“头顶”高度
 BP_Egg_Base.CarryOffsetZ = 100
 
@@ -50,6 +50,9 @@ BP_Egg_Base.Weight = 1
 
 -- 持有该蛋的玩家 Key（0 = 无人持有）；同步给客户端，用于判断“我是否已持有蛋”
 BP_Egg_Base.HolderKey = 0
+
+-- 孵化主人（领地主人）的玩家 Key（0 = 未知）；仅服务端使用，用于给孵化出的宠物记录归属
+BP_Egg_Base.IncubateOwnerKey = 0
 
 -- 客户端本地倒计时（秒），仅客户端倒计时显示用，不参与同步
 BP_Egg_Base.ClientIncubateRemain = nil
@@ -81,7 +84,7 @@ function BP_Egg_Base:GetAvailableServerRPCs()
 end
 
 -- ⭐ 表数据 ⭐
--- 按蛋 Actor 上配置的 EggTypeID 读取蛋表配置行
+-- 按蛋Actor上配置的EggTypeID读取蛋表配置行
 function BP_Egg_Base:LoadConfig()
     local TableData = UGCGameSystem.GetTableData(UGCGameSystem.GetUGCResourcesFullPath(self.EggTablePath))
     if TableData == nil then
@@ -98,7 +101,7 @@ function BP_Egg_Base:LoadConfig()
         ugcprint("[BP_Egg_Base] 蛋表中未找到 EggTypeID=" .. tostring(self.EggTypeID))
         return
     end
-    -- 体重随机：以表内 Weight 为基准体重，乘一个全局浮动系数
+    -- 体重随机：以表内Weight为基准体重，乘一个全局浮动系数
     local BaseWeight = tonumber(self.Config.Weight) or 1
     if BaseWeight <= 0 then
         BaseWeight = 1
@@ -107,7 +110,7 @@ function BP_Egg_Base:LoadConfig()
 end
 
 -- 在基准体重上随机一个浮动系数：系数 = MinScale + (MaxScale - MinScale) * RandomFloat()^BiasExp
--- BiasExp > 1 时结果偏向 MinScale，即偏小、大蛋稀有
+-- BiasExp > 1 时结果偏向MinScale，即偏小、大蛋稀有
 function BP_Egg_Base:RollWeight(BaseWeight)
     local MinScale = tonumber(self.RandMinScale) or 1
     local MaxScale = tonumber(self.RandMaxScale) or 1
@@ -181,6 +184,11 @@ function BP_Egg_Base:IsHeldByKey(PlayerKey)
     return Holder ~= 0 and Holder == tonumber(PlayerKey)
 end
 
+-- 是否已被某玩家占用（有持有者）；用于拾取判定的加固
+function BP_Egg_Base:IsOccupied()
+    return (tonumber(self.HolderKey) or 0) ~= 0
+end
+
 -- ⭐ 孵化剩余时间显示（仅客户端；UGCDebugSystem.PrintToScreen 只在客户端生效）⭐
 -- 每帧打印一条（默认 Duration=0 只保持一帧），屏幕左上角始终显示当前剩余时间
 function BP_Egg_Base:TickIncubateScreen(DeltaTime)
@@ -206,13 +214,13 @@ function BP_Egg_Base:TickIncubateScreen(DeltaTime)
     UGCDebugSystem.PrintToScreen(string.format("孵蛋剩余时间：%.1f 秒", self.ClientIncubateRemain))
 end
 
--- ⭐ 拾取 / 放下（仅服务端） ⭐
--- 被玩家拾取：蛋附着到玩家身上（头顶携带），进入 Held 状态
+-- ⭐ 拾取/放下（仅服务端） ⭐
+-- 被玩家拾取：蛋附着到玩家身上（头顶携带），进入Held状态
 function BP_Egg_Base:PickUpByPawn(Pawn)
     if not UGCGameSystem.IsServer() then
         return false
     end
-    if Pawn == nil or not self:IsFree() then
+    if Pawn == nil or not self:IsFree() or self:IsOccupied() then
         return false
     end
     -- 附着到玩家，并把蛋摆到头顶位置
@@ -248,19 +256,38 @@ function BP_Egg_Base:DropByPawn(Pawn)
     self:SetState(self.STATE_FREE)
 end
 
+-- 就地释放：脱离携带、清空持有者并回到Free状态（保持在当前位置）
+-- 用于持有者异常离开（掉线/PC 销毁）且没有可用Pawn落脚的情形，避免蛋被“幽灵持有”而无人可拾
+function BP_Egg_Base:ReleaseInPlace()
+    if not UGCGameSystem.IsServer() then
+        return
+    end
+    if not self:IsHeld() then
+        return
+    end
+    local Root = UGCActorComponentUtility.GetRootComponent(self)
+    if Root then
+        UGCActorComponentUtility.DetachFromParent(Root, true, false)
+    end
+    self.HolderKey = 0
+    self:SetState(self.STATE_FREE)
+end
+
 -- ⭐ 孵化（仅服务端） ⭐
--- 当前由 GM 指令触发；后续接入安全区后改为「在自家基地内放下时触发」
-function BP_Egg_Base:StartIncubate()
+-- 由「在自家领地内放下蛋」触发（GM 指令为绕过领地限制的测试手段）
+-- OwnerKey：孵化主人（领地主人）的玩家 Key，用于给孵化出的宠物记录归属
+function BP_Egg_Base:StartIncubate(OwnerKey)
     if not UGCGameSystem.IsServer() then
         return
     end
     if self:IsIncubating() then
         return
     end
+    self.IncubateOwnerKey = tonumber(OwnerKey) or 0
     self:SetState(self.STATE_INCUBATING)
     local IncubateTime = self:CalcIncubateTime()
     self.IncubateTime = IncubateTime   -- 同步给客户端做倒计时显示
-    ugcprint("[BP_Egg_Base] 开始孵化，孵化时间=" .. tostring(IncubateTime) .. " 秒")
+    ugcprint("[BP_Egg_Base] 开始孵化，孵化时间=" .. tostring(IncubateTime) .. " 秒，OwnerKey=" .. tostring(self.IncubateOwnerKey))
     UGCTimerUtility.CreateLuaTimer(IncubateTime, function()
         self:FinishIncubate()
     end, false)
@@ -292,12 +319,6 @@ end
 
 -- 生成宠物（占位 BP，路径由蛋表 PetClassPath 指定，后补造型时改表即可）
 function BP_Egg_Base:SpawnPet()
-    -- local PetClassPath = self.Config and self.Config.PetClassPath
-    -- local PetClassPath = UGCGameSystem.GetUGCResourcesFullPath('Asset/Blueprint/YXBlueprint/Pet/BP_Pet_Base.BP_Pet_Base_C')
-    -- if PetClassPath == nil or PetClassPath == "" then
-    --     ugcprint("[BP_Egg_Base] 蛋表未配置 PetClassPath，跳过生成宠物")
-    --     return
-    -- end
     local PetClass = self.Config.PetClass
     if PetClass == nil then
         ugcprint("[BP_Egg_Base] 加载宠物类失败: " .. tostring(PetClass))
@@ -305,9 +326,12 @@ function BP_Egg_Base:SpawnPet()
     end
     local Loc = UGCActorComponentUtility.GetActorLocation(self)
     local Scale = self:CalcPetScale()
-    local Pet = UGCActorComponentUtility.SpawnActor(
-        UGCGameSystem.GetGameState(), PetClass, Loc, Rotator.New(0, 0, 0), Vector.New(Scale, Scale, Scale), nil)
-    ugcprint("[BP_Egg_Base] 孵化完成，生成宠物 Scale=" .. tostring(Scale) .. " Pet=" .. tostring(Pet))
+    local Pet = UGCActorComponentUtility.SpawnActor(UGCGameSystem.GetGameState(), PetClass, Loc, Rotator.New(0, 0, 0), Vector.New(Scale, Scale, Scale), nil)
+    -- 记录宠物归属：孵化主人（领地主人）的玩家 Key
+    if Pet ~= nil then
+        Pet.OwnerKey = tonumber(self.IncubateOwnerKey) or 0
+    end
+    ugcprint("[BP_Egg_Base] 孵化完成，生成宠物 Scale=" .. tostring(Scale) .. " OwnerKey=" .. tostring(self.IncubateOwnerKey) .. " Pet=" .. tostring(Pet))
 end
 
 return BP_Egg_Base
