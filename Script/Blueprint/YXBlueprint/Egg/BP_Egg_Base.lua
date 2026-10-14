@@ -187,6 +187,7 @@ end
 
 -- 持有者变更（客户端用于抑制描边，无需额外表现）
 function BP_Egg_Base:OnRep_HolderKey()
+
 end
 
 -- 是否被指定玩家持有
@@ -210,6 +211,7 @@ function BP_Egg_Base:TickIncubateScreen(DeltaTime)
 
     if self.EggState ~= self.STATE_INCUBATING then
         self.ClientIncubateRemain = nil
+
         return
     end
 
@@ -226,6 +228,7 @@ function BP_Egg_Base:TickIncubateScreen(DeltaTime)
     if self.ClientIncubateRemain < 0 then
         self.ClientIncubateRemain = 0
     end
+
     UGCDebugSystem.PrintToScreen(string.format("孵蛋剩余时间：%.1f 秒", self.ClientIncubateRemain))
 end
 
@@ -249,6 +252,7 @@ function BP_Egg_Base:PickUpByPawn(Pawn)
 
     self.HolderKey = tonumber(UGCGameSystem.GetPlayerKeyByPlayerPawn(Pawn)) or 0
     self:SetState(self.STATE_HELD)
+
     return true
 end
 
@@ -324,6 +328,7 @@ function BP_Egg_Base:CalcIncubateTime()
     local Weight = tonumber(self.Weight) or 1
     local RarityRow = self:GetRarityRow()
     local BaseTime = tonumber(RarityRow and RarityRow.BaseIncubateTime) or 10
+
     return BaseTime * (Weight / (tonumber(self.WeightBase) or 1))
 end
 
@@ -332,6 +337,7 @@ function BP_Egg_Base:CalcPetScale()
     local Weight = tonumber(self.Weight) or 1
     local RarityRow = self:GetRarityRow()
     local Coef = tonumber(RarityRow and RarityRow.PetSizeCoef) or 1
+
     return Weight * Coef
 end
 
@@ -348,6 +354,7 @@ function BP_Egg_Base:SpawnPet()
     local PetClass = self.Config.PetClass
     if PetClass == nil then
         ugcprint("[BP_Egg_Base] 加载宠物类失败: " .. tostring(PetClass))
+        
         return
     end
 

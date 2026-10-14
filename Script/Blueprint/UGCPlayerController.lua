@@ -93,6 +93,10 @@ function UGCPlayerController:RPC_Server_SetViewMode(IsFPP)
     end
 end
 
+function UGCPlayerController:StartBT()
+    
+end
+
 function UGCPlayerController:OnLeaveRunningMachine()
     self.LeaveRunningMachineDelegate:Broadcast()
 end
